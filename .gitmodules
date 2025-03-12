@@ -1,34 +1,35 @@
 [submodule "osvvm"]
-	path = osvvm
-	url = ../OSVVM.git
+    path = osvvm
+    url = https://github.com/OSVVM/OSVVM.git
 [submodule "Common"]
-	path = Common
-	url = ../OSVVM-Common.git
+    path = Common
+    url = https://github.com/OSVVM/OSVVM-Common.git
 [submodule "Scripts"]
-	path = Scripts
-	url = ../OSVVM-Scripts.git
+    path = Scripts
+    url = https://github.com/OSVVM/OSVVM-Scripts.git
 [submodule "AXI4"]
-	path = AXI4
-	url = ../AXI4.git
+    path = AXI4
+    url = https://github.com/OSVVM/AXI4.git
 [submodule "UART"]
-	path = UART
-	url = ../UART.git
+    path = UART
+    url = https://github.com/OSVVM/UART.git
 [submodule "Documentation"]
-	path = Documentation
-	url = ../Documentation.git
+    path = Documentation
+    url = https://github.com/OSVVM/Documentation.git
 [submodule "DpRam"]
-	path = DpRam
-	url = ../DpRam.git
+    path = DpRam
+    url = https://github.com/OSVVM/DpRam.git
 [submodule "Ethernet"]
-	path = Ethernet
-	url = ../Ethernet.git
+    path = Ethernet
+    url = https://github.com/OSVVM/Ethernet.git
 [submodule "CoSim"]
-	path = CoSim
-	url = ../CoSim.git
+    path = CoSim
+    url = https://github.com/OSVVM/CoSim.git
 [submodule "VideoBus_LouisAdriaens"]
-	path = VideoBus_LouisAdriaens
-	url = ../VideoBus_LouisAdriaens.git
+    path = VideoBus_LouisAdriaens
+    url = https://github.com/OSVVM/VideoBus_LouisAdriaens.git
 [submodule "SPI_GuyEschemann"]
-	path = SPI_GuyEschemann
-	url = ../SPI_GuyEschemann.git
-	branch = main
+    path = SPI_GuyEschemann
+    url = https://github.com/OSVVM/SPI_GuyEschemann.git
+    branch = main
+
