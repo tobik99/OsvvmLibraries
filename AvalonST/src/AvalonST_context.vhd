@@ -39,11 +39,11 @@
 --
 
 context AvalonST_context is
-    library osvvm_common ; 
-    context osvvm_common.OsvvmCommonContext ;  
+    library osvvm_common;
+    context osvvm_common.OsvvmCommonContext;
 
-    library osvvm_avalonst ;  
-    use osvvm_avalonst.AvalonST_tb_pkg.all ; 
-    use osvvm_avalonst.AvalonST_source_component_pkg.all ; 
-end context AvalonST_context ; 
-
+    library osvvm_avalonst;
+    --use osvvm_avalonst.AvalonST_tb_pkg.all;
+    use osvvm_avalonst.AvalonST_source_component_pkg.all;
+    use osvvm_avalonst.avalon_test_common_pkg.all;
+end context AvalonST_context;

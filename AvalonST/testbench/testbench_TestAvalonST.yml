@@ -1,0 +1,30 @@
+Version: "2025.02"
+Date: 2025-03-12T22:13:30+01:00
+TestSuites: 
+  - Name: DefaultLib
+    TestCases:
+      - TestCaseName: "AvalonST_SendTest_a"
+        TestCaseFileName: "AvalonST_SendTest_a"
+        Generics:           null
+        ElapsedTime: 0.449
+    ElapsedTime: 0.614
+BuildInfo:
+  StartTime:            2025-03-12T22:13:30+01:00
+  FinishTime:           2025-03-12T22:13:49+01:00
+  Elapsed:              18.469
+  Simulator:            "QuestaSim -gui"
+  SimulatorVersion:     "2023.3"
+  OsvvmVersion:         "2025.02"
+  BuildErrorCode:       0
+  AnalyzeErrorCount:    0
+  SimulateErrorCount:   0
+OsvvmSettingsInfo:
+  BaseDirectory:        ""
+  ReportsSubdirectory:  "reports"
+  SimulationLogFile: "logs/QuestaSim-2023.3/testbench_TestAvalonST.log"
+  SimulationHtmlLogFile: "logs/QuestaSim-2023.3/testbench_TestAvalonST_log.html"
+  RequirementsSubdirectory: ""
+  CoverageSubdirectory: ""
+  Report2CssFiles:
+    - "reports/CssOsvvmStyle.css"
+  Report2PngFile:  "reports/OsvvmLogo.png"

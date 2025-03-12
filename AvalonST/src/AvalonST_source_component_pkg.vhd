@@ -43,10 +43,13 @@
 library ieee;
   use ieee.std_logic_1164.all;
 
-library OSVVM;
-  context OSVVM.OsvvmContext;
+library osvvm;
+  context osvvm.OsvvmContext;
 
-  use work.AvalonST_tb_pkg.all;
+  library osvvm_common;
+  context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
+
+  --use work.AvalonST_tb_pkg.all;
 
 package AvalonST_source_component_pkg is
 
@@ -57,14 +60,14 @@ package AvalonST_source_component_pkg is
     );
     port (
       -- global signals
-      clk          : in  std_logic;
-      nreset        : in  std_logic;
+      i_clk          : in  std_logic;
+      i_nreset        : in  std_logic;
       -- testbench transaction interface
-      trans_rec     : inout AvalonStreamRecType;
+      io_trans_rec     : inout StreamRecType;
       -- AvalonST functional interface
-      stream_data   : out std_logic_vector(DEFAULT_DATA_WIDTH-1 downto 0);
-      stream_valid  : out std_logic;
-      stream_ready  : in  std_logic
+      o_data   : out std_logic_vector(DEFAULT_DATA_WIDTH-1 downto 0);
+      o_valid  : out std_logic;
+      i_ready  : in  std_logic
     );
   end component AvalonStreamingSource;
 

@@ -1,36 +1,33 @@
-
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use ieee.numeric_std_unsigned.all;
 
-library OSVVM;
-context OSVVM.OsvvmContext;
+library osvvm;
+context osvvm.OsvvmContext;
 
-library osvvm_common;
-context osvvm_common.OsvvmCommonContext;
 use osvvm.ScoreboardPkg_slv.all;
 
---use work.UartTbPkg.all ;
---use osvvm.AvalonStreamingTbPkg.all; -- Falls du eine OSVVM-Testbench-Erweiterung machst
+library osvvm_avalonst;
+context osvvm_avalonst.AvalonST_context;
+--use osvvm_avalonst.AvalonST_tb_pkg.all; -- for rec_avalon_stream
 
 entity AvalonStreamingSource is
   generic (
     MODEL_ID_NAME      : string  := "";
-    DEFAULT_DATA_WIDTH : integer := 32;
-    DEFAULT_CHANNELS   : integer := 1
+    DEFAULT_DATA_WIDTH : integer := 32--;
+    --DEFAULT_CHANNELS   : integer := 1
   );
   port (
-    clk   : in std_logic;
-    rst_n : in std_logic;
+    i_clk   : in std_logic;
+    i_nreset : in std_logic;
     -- DUT signals
     o_valid : out std_logic := '0';
     o_data  : out std_logic_vector(DEFAULT_DATA_WIDTH - 1 downto 0);
     i_ready : in std_logic;
 
     -- testbench record
-    TransRec : inout StreamRecType
+    io_trans_rec : inout StreamRecType
   );
 
   -- Derive AXI interface properties from interface signals
@@ -69,25 +66,25 @@ begin
 
   ---------------------------
 
-  TransactionDispatcher : process
-    variable Data : std_logic_vector(o_data'length);
+  TransactionDispatcher : process is
+    variable Data : std_logic_vector(o_data'range);
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
-      Clk => Clk,
-      Rdy => TransRec.Rdy,
-      Ack => TransRec.Ack
+      Clk => i_clk,
+      Rdy => io_trans_rec.Rdy,
+      Ack => io_trans_rec.Ack
       );
 
-      case TransRec.Operation is
+      case io_trans_rec.Operation is
         when SEND | SEND_ASYNC =>
-          Data := SafeResize(ModelID, TransRec.DataToModel, Data'length);
+          Data := SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
           Push(TransmitFifo, '0' & Data);
           Increment(TransmitRequestCount);
           wait for 0 ns;
-          if IsBlocking(TransRec.Operation) then
+          if IsBlocking(io_trans_rec.Operation) then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
 
@@ -97,21 +94,23 @@ begin
           end if;
 
         when WAIT_FOR_CLOCK =>
-          WaitForClock(Clk, TransRec.IntToModel);
+          WaitForClock(i_clk, io_trans_rec.IntToModel);
 
         when GET_TRANSACTION_COUNT =>
-          TransRec.IntFromModel <= TransmitDoneCount;
+        io_trans_rec.IntFromModel <= TransmitDoneCount;
 
         when MULTIPLE_DRIVER_DETECT =>
-          Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(TransRec.Rdy), FAILURE);
+          Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(io_trans_rec.Rdy), FAILURE);
 
         when others =>
-          Alert(ModelID, "Unimplemented Transaction: " & to_string(TransRec.Operation), FAILURE);
+          Alert(ModelID, "Unimplemented Transaction: " & to_string(io_trans_rec.Operation), FAILURE);
 
       end case;
     end loop TransactionDispatcherLoop;
   end process TransactionDispatcher;
-  TransmitHandler : process
+
+  
+  TransmitHandler : process is
     variable valid : std_logic;
     variable data  : std_logic_vector(o_data'length - 1 downto 0);
   begin
@@ -127,11 +126,12 @@ begin
       end if;
 
       -- Get Transaction
-      (data, valid) := Pop(TransmitFifo);
+      -- this is just a hack...
+      --(data, valid) := Pop(TransmitFifo);
 
-      -- Do Transaction TODO where is the delta-cycle performed?
-      o_data  <= data;
-      o_valid <= valid;
+      o_data  <= SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
+      o_valid <= '1';
+      wait for 20 ns;
 
       Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(data)), INFO);
 

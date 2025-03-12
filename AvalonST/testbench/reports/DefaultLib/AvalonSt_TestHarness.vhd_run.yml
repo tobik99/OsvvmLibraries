@@ -1,0 +1,24 @@
+Version: "2025.02"
+TestCaseName: "AvalonSt_TestHarness.vhd"
+TestCaseFile: "/home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonST_SendTest_a.vhd"
+TestSuiteName: "DefaultLib"
+BuildName: ""
+Generics:           null
+TestSuiteDirectory: "reports/DefaultLib"
+RequirementsYamlFile: ""
+AlertYamlFile: ""
+CovYamlFile: ""
+ScoreboardDict:           null
+TranscriptFiles:            ""
+TestCaseFileName: "AvalonSt_TestHarness.vhd"
+GenericNames: ""
+OsvvmSettingsInfo:
+  BaseDirectory:        ""
+  ReportsSubdirectory:  "reports"
+  SimulationLogFile: "logs/QuestaSim-2023.3/.log"
+  SimulationHtmlLogFile: "logs/QuestaSim-2023.3/_log.html"
+  RequirementsSubdirectory: ""
+  CoverageSubdirectory: ""
+  Report2CssFiles:
+    - "reports/CssOsvvmStyle.css"
+  Report2PngFile:  "reports/OsvvmLogo.png"
