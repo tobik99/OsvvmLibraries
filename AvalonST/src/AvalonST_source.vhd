@@ -15,11 +15,15 @@ context osvvm_avalonst.AvalonST_context;
 entity AvalonStreamingSource is
   generic (
     MODEL_ID_NAME      : string  := "";
-    DEFAULT_DATA_WIDTH : integer := 32--;
+    DEFAULT_DATA_WIDTH : integer := 32;
+    DEFAULT_DELAY      : time    := 1 ns;
+    tpd_Clk_Address    : time    := DEFAULT_DELAY;
+    tpd_Clk_Valid      : time    := DEFAULT_DELAY;
+    tpd_Clk_oData      : time    := DEFAULT_DELAY
     --DEFAULT_CHANNELS   : integer := 1
   );
   port (
-    i_clk   : in std_logic;
+    i_clk    : in std_logic;
     i_nreset : in std_logic;
     -- DUT signals
     o_valid : out std_logic := '0';
@@ -80,13 +84,19 @@ begin
 
       case io_trans_rec.Operation is
         when SEND | SEND_ASYNC =>
-          Data := SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
-          Push(TransmitFifo, '0' & Data);
-          Increment(TransmitRequestCount);
-          wait for 0 ns;
-          if IsBlocking(io_trans_rec.Operation) then
-            wait until TransmitRequestCount = TransmitDoneCount;
-          end if;
+          --Data := SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
+          --Push(TransmitFifo, '0' & Data);
+          --Increment(TransmitRequestCount);
+          --wait for 0 ns;
+          --if IsBlocking(io_trans_rec.Operation) then
+          --  wait until TransmitRequestCount = TransmitDoneCount;
+          --end if;
+          o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
+          o_valid <= '1' after tpd_Clk_Valid;
+          WaitForClock(i_clk);
+          Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(o_data)), INFO);
+          o_data  <= not o_data after tpd_Clk_oData;
+          o_valid <= '0' after tpd_Clk_Valid;
 
         when WAIT_FOR_TRANSACTION =>
           if TransmitRequestCount /= TransmitDoneCount then
@@ -97,7 +107,7 @@ begin
           WaitForClock(i_clk, io_trans_rec.IntToModel);
 
         when GET_TRANSACTION_COUNT =>
-        io_trans_rec.IntFromModel <= TransmitDoneCount;
+          io_trans_rec.IntFromModel <= TransmitDoneCount;
 
         when MULTIPLE_DRIVER_DETECT =>
           Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(io_trans_rec.Rdy), FAILURE);
@@ -108,41 +118,39 @@ begin
       end case;
     end loop TransactionDispatcherLoop;
   end process TransactionDispatcher;
-
-  
-  TransmitHandler : process is
-    variable valid : std_logic;
-    variable data  : std_logic_vector(o_data'length - 1 downto 0);
-  begin
-    -- initialize outputs
-    o_valid <= '0';
-    o_data  <= (data'range => 'X');
-    wait for 0 ns;
-
-    TransmitLoop : loop
-      -- Find Transaction
-      if IsEmpty(TransmitFifo) then
-        WaitForToggle(TransmitRequestCount);
-      end if;
-
-      -- Get Transaction
-      -- this is just a hack...
-      --(data, valid) := Pop(TransmitFifo);
-
-      o_data  <= SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
-      o_valid <= '1';
-      wait for 20 ns;
-
-      Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(data)), INFO);
-
-      -- State after transaction
-      o_data  <= (o_data'range => 'X');
-      o_valid <= '0';
-
-      -- Signal completion
-      Increment(TransmitDoneCount);
-      wait for 0 ns;
-    end loop;
-  end process TransmitHandler;
+  --TransmitHandler : process is
+  --  variable valid : std_logic;
+  --  variable data  : std_logic_vector(o_data'length - 1 downto 0);
+  --begin
+  --  -- initialize outputs
+  --  o_valid <= '0';
+  --  o_data  <= (data'range => 'X');
+  --  wait for 0 ns;
+  --
+  --  TransmitLoop : loop
+  --    -- Find Transaction
+  --    if IsEmpty(TransmitFifo) then
+  --      WaitForToggle(TransmitRequestCount);
+  --    end if;
+  --
+  --    -- Get Transaction
+  --    -- this is just a hack...
+  --    --(data, valid) := Pop(TransmitFifo);
+  --
+  --    o_data  <= SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
+  --    o_valid <= '1';
+  --    wait for 20 ns;
+  --
+  --    Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(data)), INFO);
+  --
+  --    -- State after transaction
+  --    o_data  <= (o_data'range => 'X');
+  --    o_valid <= '0';
+  --
+  --    -- Signal completion
+  --    Increment(TransmitDoneCount);
+  --    wait for 0 ns;
+  --  end loop;
+  --end process TransmitHandler;
 
 end model;

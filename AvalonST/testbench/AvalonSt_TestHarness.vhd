@@ -91,6 +91,24 @@ begin
   tpd         => tpd
   );
 
+  AvalonST_VC : entity work.AvalonStreamingSource
+   generic map(
+      MODEL_ID_NAME => "AvalonST_VC",
+      DEFAULT_DATA_WIDTH => 32,
+      DEFAULT_DELAY => 1 ns,
+      tpd_Clk_Address => 1 ns,
+      tpd_Clk_Valid => 1 ns,
+      tpd_Clk_oData => 1 ns
+  )
+   port map(
+      i_clk => clk,
+      i_nreset => nreset,
+      o_valid => valid,
+      o_data => data,
+      i_ready => ready,
+      io_trans_rec => trans_rec
+  );
+
   -- DUT
   -- test
   TestCtrl_2 : entity work.AvalonST_TestCtrl

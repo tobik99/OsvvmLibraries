@@ -41,35 +41,38 @@
 --
 
 library ieee;
-  use ieee.std_logic_1164.all;
+use ieee.std_logic_1164.all;
 
 library osvvm;
-  context osvvm.OsvvmContext;
+context osvvm.OsvvmContext;
 
-  library osvvm_common;
-  context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
+library osvvm_common;
+context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
 
-  --use work.AvalonST_tb_pkg.all;
+--use work.AvalonST_tb_pkg.all;
 
 package AvalonST_source_component_pkg is
 
   component AvalonStreamingSource is
     generic (
-      MODEL_ID_NAME       : string  := "";
-      DEFAULT_DATA_WIDTH  : integer := 8
+      MODEL_ID_NAME      : string  := "";
+      DEFAULT_DATA_WIDTH : integer := 8;
+      DEFAULT_DELAY      : time    := 1 ns;
+      tpd_Clk_Address    : time    := DEFAULT_DELAY;
+      tpd_Clk_Write      : time    := DEFAULT_DELAY;
+      tpd_Clk_oData      : time    := DEFAULT_DELAY
     );
     port (
       -- global signals
-      i_clk          : in  std_logic;
-      i_nreset        : in  std_logic;
+      i_clk    : in std_logic;
+      i_nreset : in std_logic;
       -- testbench transaction interface
-      io_trans_rec     : inout StreamRecType;
+      io_trans_rec : inout StreamRecType;
       -- AvalonST functional interface
-      o_data   : out std_logic_vector(DEFAULT_DATA_WIDTH-1 downto 0);
-      o_valid  : out std_logic;
-      i_ready  : in  std_logic
+      o_data  : out std_logic_vector(DEFAULT_DATA_WIDTH - 1 downto 0);
+      o_valid : out std_logic;
+      i_ready : in std_logic
     );
   end component AvalonStreamingSource;
 
 end package AvalonST_source_component_pkg;
-
