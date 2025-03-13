@@ -93,11 +93,10 @@ begin
           --end if;
           o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
           o_valid <= '1' after tpd_Clk_Valid;
-          WaitForClock(i_clk);
+          wait until rising_edge(i_clk) and i_ready = '1';
           Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(o_data)), INFO);
           o_data  <= not o_data after tpd_Clk_oData;
           o_valid <= '0' after tpd_Clk_Valid;
-
         when WAIT_FOR_TRANSACTION =>
           if TransmitRequestCount /= TransmitDoneCount then
             wait until TransmitRequestCount = TransmitDoneCount;
