@@ -12,7 +12,7 @@ library osvvm_avalonst;
 context osvvm_avalonst.AvalonST_context;
 --use osvvm_avalonst.AvalonST_tb_pkg.all; -- for rec_avalon_stream
 
-entity AvalonStreamingSource is
+entity AvalonStreamTransmitter is
   generic (
     MODEL_ID_NAME      : string  := "";
     DEFAULT_DATA_WIDTH : integer := 32;
@@ -40,11 +40,11 @@ entity AvalonStreamingSource is
   -- use model instance label (preferred if set as entityname_1)
   constant MODEL_INSTANCE_NAME : string :=
   ifelse(MODEL_ID_NAME'length > 0, MODEL_ID_NAME,
-  to_lower(PathTail(AvalonStreamingSource'PATH_NAME)));
+  to_lower(PathTail(AvalonStreamTransmitter'PATH_NAME)));
 
-end AvalonStreamingSource;
+end AvalonStreamTransmitter;
 
-architecture model of AvalonStreamingSource is
+architecture bhv of AvalonStreamTransmitter is
   signal ModelID, BusFailedID : AlertLogIDType;
 
   --signal TransmitFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
@@ -63,7 +63,7 @@ begin
     ModelID <= ID;
     --    ProtocolID       <= NewID("Protocol Error", ID ) ;
     --    DataCheckID      <= NewID("Data Check", ID ) ;
-    BusFailedID  <= NewID("No response", ID);
+    BusFailedID <= NewID("No response", ID);
     --TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => DISABLED, Search => PRIVATE_NAME);
     wait;
   end process Initialize;
@@ -95,7 +95,7 @@ begin
           o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
           o_valid <= '1' after tpd_Clk_Valid;
           wait until rising_edge(i_clk);
-          
+
           o_data  <= not o_data after tpd_Clk_oData;
           o_valid <= '0' after tpd_Clk_Valid;
         when WAIT_FOR_TRANSACTION =>
@@ -153,4 +153,4 @@ begin
   --  end loop;
   --end process TransmitHandler;
 
-end model;
+end bhv;

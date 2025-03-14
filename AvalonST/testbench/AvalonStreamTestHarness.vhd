@@ -52,6 +52,8 @@ context osvvm.OsvvmContext;
 
 library osvvm_avalonst;
 context osvvm_avalonst.AvalonST_context;
+use osvvm_avalonst.AvalonStreamReceiver;
+use osvvm_avalonst.AvalonStreamTransmitter;
 
 entity AvalonST_test_harness is
 end entity AvalonST_test_harness;
@@ -63,11 +65,11 @@ architecture AvalonST_test_harness_arch of AvalonST_test_harness is
   signal clk    : std_logic := '1';
   signal nreset : std_logic;
 
-  signal ready : std_logic                     := '0';
-  signal data  : std_logic_vector(31 downto 0) := (others => '0');
-  signal valid : std_logic                     := '0';
+  signal ready : std_logic;
+  signal data  : std_logic_vector(31 downto 0);
+  signal valid : std_logic;
 
-  signal trans_rec : StreamRecType(
+  signal tx_trans_rec, rx_trans_rec : StreamRecType(
   DataToModel (32 - 1 downto 0),
   DataFromModel (32 - 1 downto 0),
   ParamToModel (32 - 1 downto 0),
@@ -91,23 +93,39 @@ begin
   tpd         => tpd
   );
 
-  AvalonST_VC : entity work.AvalonStreamingSource
-   generic map(
-      MODEL_ID_NAME => "AvalonST_VC",
+  AvalonStreamTransmitter_VC : entity osvvm_avalonst.AvalonStreamTransmitter
+    generic map(
+      MODEL_ID_NAME      => "AvalonStreamTransmitter_VC",
       DEFAULT_DATA_WIDTH => 32,
-      DEFAULT_DELAY => 1 ns,
-      tpd_Clk_Address => 1 ns,
-      tpd_Clk_Valid => 1 ns,
-      tpd_Clk_oData => 1 ns
-  )
-   port map(
-      i_clk => clk,
-      i_nreset => nreset,
-      o_valid => valid,
-      o_data => data,
-      i_ready => ready,
-      io_trans_rec => trans_rec
-  );
+      DEFAULT_DELAY      => 1 ns,
+      tpd_Clk_Address    => 1 ns,
+      tpd_Clk_Valid      => 1 ns,
+      tpd_Clk_oData      => 1 ns
+    )
+    port map(
+      i_clk        => clk,
+      i_nreset     => nreset,
+      o_valid      => valid,
+      o_data       => data,
+      i_ready      => ready,
+      io_trans_rec => tx_trans_rec
+    );
+
+  AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver
+    generic map(
+      MODEL_ID_NAME      => "AvalonSreamReceiver_VC",
+      DEFAULT_DATA_WIDTH => 32,
+      DEFAULT_DELAY      => 1 ns,
+      tpd_Clk_Ready      => 1 ns
+    )
+    port map(
+      i_clk        => clk,
+      i_nreset     => nreset,
+      i_valid      => valid,
+      i_data       => data,
+      o_ready      => ready,
+      io_trans_rec => rx_trans_rec
+    );
 
   -- DUT
   -- test
@@ -116,13 +134,9 @@ begin
       -- Globals
       i_nreset => nreset,
       i_clk    => clk,
-      -- Testbench Transaction Interfaces
-      i_valid => valid,
-      o_ready => ready,
-      i_data  => data,
+     
       -- Transaction Record
-      io_trans_rec => trans_rec
+      io_tx_trans_rec => tx_trans_rec,
+      io_rx_trans_rec => rx_trans_rec
     );
-  
-
 end architecture AvalonST_test_harness_arch;

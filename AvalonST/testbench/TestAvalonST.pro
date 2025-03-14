@@ -38,13 +38,15 @@
 
 library osvvm_avalonst
 
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonST_context.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonST_source_component_pkg.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonSt_test_common_pkg.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonST_source.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonST_TestCtrl_e.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonST_SendTest_a.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonSt_TestHarness.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamTransmitter.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamReceiver.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamContext.vhd
+# analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamComponentPkg.vhd
+# analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonSt_test_common_pkg.vhd
+
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestCtrl.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetTest.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestHarness.vhd
 
 simulate AvalonST_test_harness
 # RunTest AvalonST_test_harness

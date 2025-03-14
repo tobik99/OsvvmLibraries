@@ -1,4 +1,3 @@
--- filepath: /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonST_Transmitter_tb.vhd
 
 architecture AvalonST_SendTest of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
@@ -22,8 +21,6 @@ begin
     -- Wait for simulation elaboration/initialization 
     wait for 0 ns;
     wait for 0 ns;
-    --TranscriptOpen;
-    --SetTranscriptMirror(TRUE);
 
     -- Wait for Design Reset
     wait until i_nreset = '1';
@@ -34,45 +31,37 @@ begin
     WaitForBarrier(TestDone, 3 ms);
     AlertIf(now >= 200 ns, "Test finished due to timeout");
     AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
-   -- TranscriptClose;
-   -- if CHECK_TRANSCRIPT then
-   --   AffirmIfTranscriptsMatch(AVALON_STREAM_VALIDATED_RESULTS_DIR);
-   -- end if;
+
     EndOfTestReports;
-    --std.env.stop(GetAlertCount);
-    --EndOfTestSummary(ReportAll => TRUE);
-    wait;
+    std.env.stop;
   end process;
 
   -- Test process
-  transmitter_VC : process
-
+  transmitter_proc : process
   begin
-    -- Send data using AvalonStreamSend procedure
-    --for i in 0 to 255 loop
-    o_ready <= '0';
     wait until i_nreset = '1';
-    o_ready <= '1';
     wait for 0 ns;
 
-    --Push(scoreboard, ExpData);
-    SEND(io_trans_rec, ExpData);
+    SEND(io_tx_trans_rec, ExpData);
 
-    WaitForClock(io_trans_rec, 2);
+    WaitForClock(io_tx_trans_rec, 2);
     WaitForBarrier(TestDone);
     wait;
-  end process transmitter_VC;
+  end process transmitter_proc;
 
-  receiver_test : process
+  receiver_proc : process
+    variable rx_data : std_logic_vector(31 downto 0);
   begin
-    wait until (i_valid = '1');
-    RxData <= i_data;
+    wait until i_nreset = '1';
+    Get(io_rx_trans_rec, rx_data);
+    RxData <= rx_data;
     wait for 0 ns;
     AffirmIf(ExpData = RxData, "Data: " & to_string(ExpData),
     " /= Expected: " & to_string(RxData));
 
+    WaitForClock(io_rx_trans_rec, 2);
     WaitForBarrier(TestDone);
     wait;
-  end process receiver_test;
+  end process receiver_proc;
 
 end architecture AvalonST_SendTest;

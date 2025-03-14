@@ -45,23 +45,23 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+
 library osvvm;
 context osvvm.OsvvmContext;
 use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_avalonst;
 context osvvm_avalonst.AvalonST_context;
+
+use std.env.finish;
 entity AvalonST_TestCtrl is
   port (
     -- Global Signal Interface
     i_nreset : in std_logic;
     i_clk    : in std_logic;
 
-    -- DUT signals
-    i_valid : in std_logic;
-    o_ready : out std_logic;
-    i_data  : in std_logic_vector(31 downto 0);
     -- Record Interface
-    io_trans_rec : inout StreamRecType
+    io_tx_trans_rec : inout StreamRecType;
+    io_rx_trans_rec : inout StreamRecType
   );
 end AvalonST_TestCtrl;
