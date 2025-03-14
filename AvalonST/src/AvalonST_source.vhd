@@ -47,7 +47,7 @@ end AvalonStreamingSource;
 architecture model of AvalonStreamingSource is
   signal ModelID, BusFailedID : AlertLogIDType;
 
-  signal TransmitFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
+  --signal TransmitFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
 
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
 
@@ -64,14 +64,13 @@ begin
     --    ProtocolID       <= NewID("Protocol Error", ID ) ;
     --    DataCheckID      <= NewID("Data Check", ID ) ;
     BusFailedID  <= NewID("No response", ID);
-    TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => DISABLED, Search => PRIVATE_NAME);
+    --TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => DISABLED, Search => PRIVATE_NAME);
     wait;
   end process Initialize;
 
   ---------------------------
 
   TransactionDispatcher : process is
-    variable Data : std_logic_vector(o_data'range);
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
@@ -91,10 +90,12 @@ begin
           --if IsBlocking(io_trans_rec.Operation) then
           --  wait until TransmitRequestCount = TransmitDoneCount;
           --end if;
+          wait until rising_edge(i_clk) and i_ready = '1';
+          Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
           o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
           o_valid <= '1' after tpd_Clk_Valid;
-          wait until rising_edge(i_clk) and i_ready = '1';
-          Log(ModelID, "Avalon Stream Send." & "data: " & to_hxstring(to_x01(o_data)), INFO);
+          wait until rising_edge(i_clk);
+          
           o_data  <= not o_data after tpd_Clk_oData;
           o_valid <= '0' after tpd_Clk_Valid;
         when WAIT_FOR_TRANSACTION =>

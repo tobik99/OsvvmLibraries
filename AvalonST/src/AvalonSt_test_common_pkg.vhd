@@ -48,7 +48,6 @@ context OSVVM.OsvvmContext;
 package avalon_test_common_pkg is
   constant RESULTS_DIR                         : string := "";
   constant PATH_TO_OsvvmTestCommonPkg          : string := FILE_PATH;
-  constant AXISTREAM_VALIDATED_RESULTS_DIR     : string := PATH_TO_OsvvmTestCommonPkg & "/../ValidatedResults";
   constant AVALON_STREAM_VALIDATED_RESULTS_DIR : string := PATH_TO_OsvvmTestCommonPkg & "/../ValidatedResults";
 
   --  constant AXISTREAM_VALIDATED_RESULTS_DIR : string := std.env.FILE_PATH & "/../ValidatedResults" ;

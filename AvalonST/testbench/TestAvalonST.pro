@@ -34,7 +34,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #  
-build /home/tobi/repos/OsvvmLibraries
+#build /home/tobi/repos/OsvvmLibraries
 
 library osvvm_avalonst
 
@@ -46,4 +46,5 @@ analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonST_TestCtrl_e.v
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonST_SendTest_a.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonSt_TestHarness.vhd
 
-RunTest AvalonST_test_harness
+simulate AvalonST_test_harness
+# RunTest AvalonST_test_harness

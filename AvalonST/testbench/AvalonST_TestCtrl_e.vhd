@@ -44,14 +44,10 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-use ieee.numeric_std_unsigned.all;
-use std.textio.all;
 
-library OSVVM;
-context OSVVM.OsvvmContext;
-
-library osvvm_common;
-context osvvm_common.OsvvmCommonContext;
+library osvvm;
+context osvvm.OsvvmContext;
+use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_avalonst;
 context osvvm_avalonst.AvalonST_context;
