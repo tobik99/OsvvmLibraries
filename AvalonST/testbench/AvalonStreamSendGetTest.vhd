@@ -1,5 +1,5 @@
 
-architecture AvalonST_SendTest of AvalonST_TestCtrl is
+architecture SendGet of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
   signal TestDone   : integer_barrier               := 1;
   signal ExpData    : std_logic_vector(31 downto 0) := x"FFFFFFFF";
@@ -13,6 +13,7 @@ begin
   ControlProc : process
   begin
     -- Initialization of test
+   
     SetTestName("AvalonST_Send");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE);   -- Enable INFO logs
@@ -33,7 +34,7 @@ begin
     AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
 
     EndOfTestReports;
-    std.env.stop;
+    std.env.finish;
   end process;
 
   -- Test process
@@ -42,9 +43,11 @@ begin
     wait until i_nreset = '1';
     wait for 0 ns;
 
-    SEND(io_tx_trans_rec, ExpData);
-
+    SendAsync(io_tx_trans_rec, ExpData);
+    --SendAsync(io_tx_trans_rec, ExpData);
     WaitForClock(io_tx_trans_rec, 2);
+    --Send(io_tx_trans_rec, ExpData);
+    --Send(io_tx_trans_rec, ExpData);
     WaitForBarrier(TestDone);
     wait;
   end process transmitter_proc;
@@ -64,4 +67,4 @@ begin
     wait;
   end process receiver_proc;
 
-end architecture AvalonST_SendTest;
+end architecture SendGet;

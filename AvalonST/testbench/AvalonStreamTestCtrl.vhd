@@ -45,7 +45,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-
 library osvvm;
 context osvvm.OsvvmContext;
 use osvvm.ScoreboardPkg_slv.all;
@@ -53,7 +52,6 @@ use osvvm.ScoreboardPkg_slv.all;
 library osvvm_avalonst;
 context osvvm_avalonst.AvalonST_context;
 
-use std.env.finish;
 entity AvalonST_TestCtrl is
   port (
     -- Global Signal Interface
@@ -65,3 +63,5 @@ entity AvalonST_TestCtrl is
     io_rx_trans_rec : inout StreamRecType
   );
 end AvalonST_TestCtrl;
+
+

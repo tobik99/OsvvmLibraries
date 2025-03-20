@@ -55,6 +55,8 @@ context osvvm_avalonst.AvalonST_context;
 use osvvm_avalonst.AvalonStreamReceiver;
 use osvvm_avalonst.AvalonStreamTransmitter;
 
+
+
 entity AvalonST_test_harness is
 end entity AvalonST_test_harness;
 architecture AvalonST_test_harness_arch of AvalonST_test_harness is
@@ -96,9 +98,9 @@ begin
   AvalonStreamTransmitter_VC : entity osvvm_avalonst.AvalonStreamTransmitter
     generic map(
       MODEL_ID_NAME      => "AvalonStreamTransmitter_VC",
-      DEFAULT_DATA_WIDTH => 32,
+      AVALON_STREAM_DATA_WIDTH => 32,
+      AVALON_STREAM_READY_LATENCY => 0,
       DEFAULT_DELAY      => 1 ns,
-      tpd_Clk_Address    => 1 ns,
       tpd_Clk_Valid      => 1 ns,
       tpd_Clk_oData      => 1 ns
     )
@@ -114,9 +116,10 @@ begin
   AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver
     generic map(
       MODEL_ID_NAME      => "AvalonSreamReceiver_VC",
-      DEFAULT_DATA_WIDTH => 32,
+      AVALON_STREAM_DATA_WIDTH => 32,
+      AVALON_STREAM_READY_LATENCY => 0,
       DEFAULT_DELAY      => 1 ns,
-      tpd_Clk_Ready      => 1 ns
+      tpd_Clk_oReady      => 1 ns
     )
     port map(
       i_clk        => clk,
@@ -129,7 +132,7 @@ begin
 
   -- DUT
   -- test
-  TestCtrl_2 : entity work.AvalonST_TestCtrl
+  TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(SendGetLatency)
     port map(
       -- Globals
       i_nreset => nreset,
