@@ -14,7 +14,7 @@ begin
   begin
     -- Initialization of test
    
-    SetTestName("AvalonST_Send");
+    SetTestName("AvalonST_SendGet");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE);   -- Enable INFO logs
     -- Scoreboard initialization

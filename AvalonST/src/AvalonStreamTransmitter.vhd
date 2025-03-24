@@ -23,6 +23,7 @@ entity AvalonStreamTransmitter is
     AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
     DEFAULT_DELAY                 : time                    := 1 ns;
     tpd_Clk_Valid                 : time                    := DEFAULT_DELAY;
+    tperiod_Clk    : time := 10 ns ;
     tpd_Clk_oData                 : time                    := DEFAULT_DELAY
     --DEFAULT_CHANNELS   : integer := 1
   );
@@ -49,42 +50,6 @@ architecture bhv of AvalonStreamTransmitter is
   signal ModelID, BusFailedID                    : AlertLogIDType;
   signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
-  procedure Avalon_Stream_Send is
-  begin
-    if (AVALON_STREAM_READY_LATENCY > 0) then
-      for i in AVALON_STREAM_READY_LATENCY - 1 downto 1 loop -- todo -> either downto 1 or 0
-        wait until rising_edge(i_clk);
-        if (i_ready = '0') then
-          Alert(ModelID, "Error: Ready signal was not asserted for the full AVALON_STREAM_READY_LATENCY duration", FAILURE);
-        end if;
-      end loop;
-
-      Log(ModelID, "Avalon Stream Send. data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
-      o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
-      o_valid <= '1' after tpd_Clk_Valid;
-      wait until rising_edge(i_clk);
-      o_data  <= not o_data after tpd_Clk_oData;
-      o_valid <= '0' after tpd_Clk_Valid;
-
-    elsif (AVALON_STREAM_READY_LATENCY = 0) then
-      wait until rising_edge(i_clk) and i_ready = '1';
-      Log(ModelID, "Avalon Stream Send. data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
-      o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
-      o_valid <= '1' after tpd_Clk_Valid;
-      wait until rising_edge(i_clk) and i_ready = '1';
-      o_data  <= not o_data after tpd_Clk_oData;
-      o_valid <= '0' after tpd_Clk_Valid;
-
-    elsif (AVALON_STREAM_READY_LATENCY =- 1) then
-      wait until rising_edge(i_clk);
-      Log(ModelID, "Avalon Stream Send. data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
-      o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
-      o_valid <= '1' after tpd_Clk_Valid;
-      wait until rising_edge(i_clk);
-      o_data  <= not o_data after tpd_Clk_oData;
-      o_valid <= '0' after tpd_Clk_Valid;
-    end if;
-  end procedure Avalon_Stream_Send;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -97,9 +62,8 @@ begin
     ModelID <= ID;
     --    ProtocolID       <= NewID("Protocol Error", ID ) ;
     --    DataCheckID      <= NewID("Data Check", ID ) ;
-    BusFailedID  <= NewID("No response", ID);
+    --BusFailedID  <= NewID("No response", ID);
     TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
-
     if (AVALON_STREAM_READY_ALLOWANCE < AVALON_STREAM_READY_LATENCY) then
       Alert(ModelID, "Ready Allowance must be at least Ready Latency or greater", FAILURE);
     end if;
@@ -127,7 +91,9 @@ begin
           Increment(TransmitRequestCount);
           wait for 0 ns;
           if IsBlocking(io_trans_rec.Operation) then
+            log("waiting until blocked send completed");
             wait until TransmitRequestCount = TransmitDoneCount;
+            log("async wait completed");
           end if;
 
         when WAIT_FOR_TRANSACTION =>
@@ -167,7 +133,9 @@ begin
       end if;
       -- Get Transaction
       (data) := Pop(TransmitFifo);
-      Avalon_Stream_Send;
+      o_data <= data;
+      DoAvalonStreamValidHandshake(i_clk, o_valid, i_ready, tpd_Clk_Valid, BusFailedID, "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk); -- the wait statement for o_data is covered in here;
+     
       -- when done
       Increment(TransmitDoneCount);
       wait for 0 ns;

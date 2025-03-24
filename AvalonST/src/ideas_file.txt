@@ -1,0 +1,80 @@
+procedure Avalon_Stream_Send is
+  begin
+    if (AVALON_STREAM_READY_LATENCY > 0) then
+      for i in AVALON_STREAM_READY_LATENCY - 1 downto 1 loop -- todo -> either downto 1 or 0
+        wait until rising_edge(i_clk);
+        if (i_ready = '0') then
+          Alert(ModelID, "Error: Ready signal was not asserted for the full AVALON_STREAM_READY_LATENCY duration", FAILURE);
+        end if;
+      end loop;
+
+      Log(ModelID, "Avalon Stream Send. data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
+      o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
+      o_valid <= '1' after tpd_Clk_Valid;
+      wait until rising_edge(i_clk);
+      o_data  <= not o_data after tpd_Clk_oData;
+      o_valid <= '0' after tpd_Clk_Valid;
+
+    elsif (AVALON_STREAM_READY_LATENCY = 0) then
+      wait until rising_edge(i_clk) and i_ready = '1';
+      Log(ModelID, "Avalon Stream Send. data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
+      o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
+      o_valid <= '1' after tpd_Clk_Valid;
+      wait until rising_edge(i_clk) and i_ready = '1';
+      o_data  <= not o_data after tpd_Clk_oData;
+      o_valid <= '0' after tpd_Clk_Valid;
+
+    elsif (AVALON_STREAM_READY_LATENCY =- 1) then
+      wait until rising_edge(i_clk);
+      Log(ModelID, "Avalon Stream Send. data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataToModel, o_data'length))), INFO);
+      o_data  <= SafeResize(io_trans_rec.DataToModel, o_data'length) after tpd_Clk_oData;
+      o_valid <= '1' after tpd_Clk_Valid;
+      wait until rising_edge(i_clk);
+      o_data  <= not o_data after tpd_Clk_oData;
+      o_valid <= '0' after tpd_Clk_Valid;
+    end if;
+  end procedure Avalon_Stream_Send;
+
+
+  procedure Avalon_Stream_Get is
+  begin
+    o_ready <= '1' after tpd_Clk_oReady;
+    wait for 0 ns;
+    if (AVALON_STREAM_READY_LATENCY > 0) then
+      for i in AVALON_STREAM_READY_LATENCY - 1 downto 1 loop -- todo -> either downto 1 or 0
+        wait until rising_edge(i_clk);
+        if (o_ready = '1') then
+          Alert(ModelID, "Error: Ready signal was not asserted for the full AVALON_STREAM_READY_LATENCY duration", FAILURE);
+        end if;
+      end loop;
+      if (i_valid = '1') then
+        io_trans_rec.DataFromModel <= SafeResize(ModelID, i_data, io_trans_rec.DataFromModel'length);
+        o_ready                    <= '0' after tpd_Clk_oReady;
+        wait for 0 ns;
+        Log(ModelID, "Avalon Stream Get." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataFromModel, i_data'length))), INFO);
+        wait until rising_edge(i_clk);
+        o_ready <= '0' after tpd_Clk_oReady;
+      end if;
+    elsif (AVALON_STREAM_READY_LATENCY = 0) then
+      wait until rising_edge(i_clk);
+      if(i_valid = '1') then
+      io_trans_rec.DataFromModel <= SafeResize(ModelID, i_data, io_trans_rec.DataFromModel'length);
+      o_ready                    <= '0' after tpd_Clk_oReady;
+      wait for 0 ns;
+      Log(ModelID, "Avalon Stream Get." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataFromModel, i_data'length))), INFO);
+      wait until rising_edge(i_clk);
+      o_ready <= '0' after tpd_Clk_oReady;
+      else
+        Alert(ModelID, "Error: Valid signal was expected to be asserted", FAILURE);
+      end if;
+
+    elsif (AVALON_STREAM_READY_LATENCY =- 1) then
+      wait until rising_edge(i_clk) and i_valid = '1';
+      io_trans_rec.DataFromModel <= SafeResize(ModelID, i_data, io_trans_rec.DataFromModel'length);
+      o_ready                    <= '0' after tpd_Clk_oReady;
+      wait for 0 ns;
+      Log(ModelID, "Avalon Stream Get." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataFromModel, i_data'length))), INFO);
+      wait until rising_edge(i_clk);
+      o_ready <= '0' after tpd_Clk_oReady;
+    end if;
+  end procedure Avalon_Stream_Get;

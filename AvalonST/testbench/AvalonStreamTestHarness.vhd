@@ -97,7 +97,7 @@ begin
 
   AvalonStreamTransmitter_VC : entity osvvm_avalonst.AvalonStreamTransmitter
     generic map(
-      MODEL_ID_NAME      => "AvalonStreamTransmitter_VC",
+      MODEL_ID_NAME      => "AvalonStreamTransmitter",
       AVALON_STREAM_DATA_WIDTH => 32,
       AVALON_STREAM_READY_LATENCY => 0,
       DEFAULT_DELAY      => 1 ns,
@@ -115,7 +115,7 @@ begin
 
   AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver
     generic map(
-      MODEL_ID_NAME      => "AvalonSreamReceiver_VC",
+      MODEL_ID_NAME      => "AvalonSreamReceiver",
       AVALON_STREAM_DATA_WIDTH => 32,
       AVALON_STREAM_READY_LATENCY => 0,
       DEFAULT_DELAY      => 1 ns,

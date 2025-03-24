@@ -52,7 +52,6 @@ context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
 --use work.AvalonST_tb_pkg.all;
 
 package AvalonST_source_component_pkg is
-
   component AvalonStreamingSource is
     generic (
       MODEL_ID_NAME      : string  := "";
@@ -74,5 +73,133 @@ package AvalonST_source_component_pkg is
       i_ready : in std_logic
     );
   end component AvalonStreamingSource;
+  ------------------------------------------------------------
+  procedure DoAvalonStreamValidHandshake (
+    ------------------------------------------------------------
+    signal Clk              : in std_logic;
+    signal Valid            : out std_logic;
+    signal Ready            : in std_logic;
+    constant tpd_Clk_Valid  : in time;
+    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string         := "";
+    constant TimeOutPeriod  : in time           := - 1 sec
+  );
+
+  ------------------------------------------------------------
+  procedure DoAvalonStreamReadyHandshake (
+    ------------------------------------------------------------
+    signal Clk                : in std_logic;
+    signal Valid              : in std_logic;
+    signal Ready              : inout std_logic;
+    constant ReadyBeforeValid : in boolean;
+    constant ReadyDelayCycles : in time;
+    constant tpd_Clk_Ready    : in time;
+    constant AlertLogID       : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage   : in string         := "";
+    constant TimeOutPeriod    : in time           := - 1 sec
+  );
 
 end package AvalonST_source_component_pkg;
+
+-- /////////////////////////////////////////////////////////////////////////////////////////
+-- /////////////////////////////////////////////////////////////////////////////////////////
+
+package body AvalonST_source_component_pkg is
+
+  ------------------------------------------------------------
+  procedure DoAvalonStreamValidHandshake (
+    ------------------------------------------------------------
+    signal Clk              : in std_logic;
+    signal Valid            : out std_logic;
+    signal Ready            : in std_logic;
+    constant tpd_Clk_Valid  : in time;
+    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string         := "";
+    constant TimeOutPeriod  : in time           := - 1 sec
+  ) is
+  begin
+
+    Valid <= '1' after tpd_Clk_Valid;
+
+    if TimeOutPeriod > 0 sec then
+      wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
+    else
+      wait on Clk until Clk = '1' and Ready = '1';
+    end if;
+
+    Valid <= '0' after tpd_Clk_Valid;
+
+    if Ready /= '1' then
+      -- Check for TimeOut
+      Alert(
+      AlertLogID,
+      TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
+      FAILURE
+      );
+      wait until Clk = '1';
+    end if;
+  end procedure DoAvalonStreamValidHandshake;
+
+  ------------------------------------------------------------
+  procedure DoAvalonStreamReadyHandshake (
+    ------------------------------------------------------------
+    signal Clk                : in std_logic;
+    signal Valid              : in std_logic;
+    signal Ready              : inout std_logic;
+    constant ReadyBeforeValid : in boolean;
+    constant ReadyDelayCycles : in time;
+    constant tpd_Clk_Ready    : in time;
+    constant AlertLogID       : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage   : in string         := "";
+    constant TimeOutPeriod    : in time           := - 1 sec
+  ) is
+  begin
+
+    if ReadyBeforeValid then
+      Ready <= transport '1' after ReadyDelayCycles + tpd_Clk_Ready;
+    end if;
+
+    -- Wait to Receive Transaction
+    if TimeOutPeriod > 0 sec then
+      wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
+    else
+      wait on Clk until Clk = '1' and Valid = '1';
+    end if;
+
+    if Valid = '1' then
+      -- Proper handling
+      if not ReadyBeforeValid then
+        Ready <= '1' after ReadyDelayCycles + tpd_Clk_Ready;
+      end if;
+
+      -- If ready not signaled yet, find ready at a rising edge of clk
+      if Ready /= '1' then
+        wait on Clk until Clk = '1' and (Ready = '1' or Valid /= '1');
+        AlertIf(
+        AlertLogID,
+        Valid /= '1',
+        TimeOutMessage &
+        " Valid (" & to_string(Valid) & ") " &
+        "deasserted before Ready asserted (" & to_string(Ready) & ") ",
+        FAILURE
+        );
+      end if;
+    else
+      -- TimeOut handling
+      Alert(
+      AlertLogID,
+      TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1",
+      FAILURE
+      );
+    end if;
+
+    -- End of operation
+    Ready <= '0' after tpd_Clk_Ready;
+
+    if Valid /= '1' then
+      -- TimeOut or Valid deasserted after before Ready asserted
+      wait until Clk = '1';
+    end if;
+  end procedure DoAvalonStreamReadyHandshake;
+
+end package body AvalonST_source_component_pkg;
