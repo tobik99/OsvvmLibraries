@@ -42,10 +42,11 @@ context AvalonStreamContext is
     library osvvm_common;
     context osvvm_common.OsvvmCommonContext;
 
-    library osvvm_avalonst;
+    library osvvm;
+    context osvvm.OsvvmContext;
+    use osvvm.ScoreboardPkg_slv.all;
 
-    --use osvvm_avalonst.AvalonST_source_component_pkg.all;
+    library osvvm_avalonst;
     use osvvm_avalonst.AvalonStreamOptionsPkg.all;
     use osvvm_avalonst.AvalonStreamComponentPkg.all;
-  
 end context AvalonStreamContext;

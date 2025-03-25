@@ -14,12 +14,12 @@ context osvvm_avalonst.AvalonStreamContext;
 entity AvalonStreamTransmitter is
   generic (
     MODEL_ID_NAME                 : string                  := "";
-    AVALON_STREAM_CHANNELS        : integer range 1 to 128  := 1;
-    AVALON_STREAM_ERROR           : integer range 1 to 256  := 1;
+   -- AVALON_STREAM_CHANNELS        : integer range 1 to 128  := 1;
+    --AVALON_STREAM_ERROR           : integer range 1 to 256  := 1;
     AVALON_STREAM_READY_LATENCY   : integer                 := 1; -- default behavior
     AVALON_STREAM_READY_ALLOWANCE : integer                 := AVALON_STREAM_READY_LATENCY;
     AVALON_STREAM_DATA_WIDTH      : integer range 1 to 8192 := 32;
-    AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
+   -- AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
     DEFAULT_DELAY                 : time                    := 1 ns;
     tpd_Clk_Valid                 : time                    := DEFAULT_DELAY;
     tperiod_Clk    : time := 10 ns ;
@@ -49,6 +49,10 @@ architecture bhv of AvalonStreamTransmitter is
   signal ModelID, BusFailedID                    : AlertLogIDType;
   signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
+
+  -- Verification Component Configuration
+  signal ValidDelayCyclesOption      : integer := 0 ;
+  signal ReadyBeforeValidDelayCyclesOption : integer := 0;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -109,6 +113,28 @@ begin
         when MULTIPLE_DRIVER_DETECT =>
           Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(io_trans_rec.Rdy), FAILURE);
 
+        when SET_MODEL_OPTIONS =>
+          case AvalonStreamOptionsType'val(io_trans_rec.Options) is
+            when TRANSMIT_VALID_DELAY_CYCLES =>
+              ValidDelayCyclesOption <= io_trans_rec.IntToModel;
+              when READY_BEFORE_VALID_DELAY_CYCLES =>
+              ReadyBeforeValidDelayCyclesOption <= io_trans_rec.IntToModel;
+              --UseCoverageDelays <= FALSE; -- todo, what is this for?
+
+            when others =>
+              Alert(ModelID, "SetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(io_trans_rec.Options)), FAILURE);
+              wait for 0 ns;
+          end case;
+
+        when GET_MODEL_OPTIONS =>
+          case AvalonStreamOptionsType'val(io_trans_rec.Options) is
+            when TRANSMIT_VALID_DELAY_CYCLES =>
+            io_trans_rec.IntFromModel <= ValidDelayCyclesOption;
+            when READY_BEFORE_VALID_DELAY_CYCLES =>
+            io_trans_rec.IntFromModel <= ReadyBeforeValidDelayCyclesOption ;
+            when others =>
+              Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(io_trans_rec.Options)), FAILURE);
+          end case;
         when others =>
           Alert(ModelID, "Unimplemented Transaction: " & to_string(io_trans_rec.Operation), FAILURE);
 
@@ -133,7 +159,7 @@ begin
       -- Get Transaction
       (data) := Pop(TransmitFifo);
       o_data <= data;
-      DoAvalonStreamValidHandshake(i_clk, o_valid, i_ready, tpd_Clk_Valid, BusFailedID, "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk); -- the wait statement for o_data is covered in here;
+      DoAvalonStreamValidHandshake(i_clk, o_valid, i_ready, ReadyBeforeValidDelayCyclesOption, tpd_Clk_Valid, BusFailedID, "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk); -- the wait statement for o_data is covered in here;
      
       -- when done
       Increment(TransmitDoneCount);

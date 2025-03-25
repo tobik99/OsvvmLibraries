@@ -120,7 +120,7 @@ begin
               WaitForToggle(WordReceiveCount);
             end if;
             
-            (Data) := pop(ReceiveFifo);
+            (Data) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
             io_trans_rec.DataFromModel <= SafeResize(ModelID, Data, io_trans_rec.DataFromModel'length);
 

@@ -45,7 +45,7 @@ architecture SendGetLatency of AvalonST_TestCtrl is
     begin
       wait until i_nreset = '1';
       wait for 0 ns;
-      SetAvalonStreamOptions(io_tx_trans_rec, RECEIVE_READY_DELAY_CYCLES, 2);
+      SetAvalonStreamOptions(io_tx_trans_rec, READY_BEFORE_VALID_DELAY_CYCLES, 3);
       SendAsync(io_tx_trans_rec, ExpData);
       
       WaitForClock(io_tx_trans_rec, 2);

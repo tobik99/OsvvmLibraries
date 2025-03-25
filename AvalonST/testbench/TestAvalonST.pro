@@ -37,17 +37,17 @@
 #build /home/tobi/repos/OsvvmLibraries
 
 library osvvm_avalonst
-
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamTransmitter.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamReceiver.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamOptionsPkg.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamComponentPkg.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamContext.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamTransmitter.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamReceiver.vhd
+
 
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestCtrl.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetTest.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetLatency.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestHarness.vhd
 
-simulate AvalonST_test_harness
+simulate AvalonStreamTestHarness
 #RunTest AvalonST_test_harness

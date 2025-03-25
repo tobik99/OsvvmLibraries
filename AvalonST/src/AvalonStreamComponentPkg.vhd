@@ -79,6 +79,7 @@ package AvalonStreamComponentPkg is
     signal Clk              : in std_logic;
     signal Valid            : out std_logic;
     signal Ready            : in std_logic;
+    constant ReadyBeforeValidCycles : in integer;
     constant tpd_Clk_Valid  : in time;
     constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string         := "";
@@ -112,6 +113,7 @@ package body AvalonStreamComponentPkg is
     signal Clk              : in std_logic;
     signal Valid            : out std_logic;
     signal Ready            : in std_logic;
+    constant ReadyBeforeValidCycles : in integer;
     constant tpd_Clk_Valid  : in time;
     constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string         := "";
@@ -119,25 +121,32 @@ package body AvalonStreamComponentPkg is
   ) is
   begin
 
-    Valid <= '1' after tpd_Clk_Valid;
+   -- Warte auf Ready innerhalb des TimeOuts
+  if TimeOutPeriod > 0 sec then
+    wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
+  else
+    wait on Clk until Clk = '1' and Ready = '1';
+  end if;
 
-    if TimeOutPeriod > 0 sec then
-      wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
-    else
-      wait on Clk until Clk = '1' and Ready = '1';
-    end if;
-
-    Valid <= '0' after tpd_Clk_Valid;
-
-    if Ready /= '1' then
-      -- Check for TimeOut
-      Alert(
+  -- Falls Ready nicht gesetzt wurde, Fehler melden
+  if Ready /= '1' then
+    Alert(
       AlertLogID,
       TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
       FAILURE
-      );
-      wait until Clk = '1';
-    end if;
+    );
+    wait until Clk = '1';
+  end if;
+
+  -- Warte die spezifizierte Anzahl an Ready-Zyklen
+  for i in 1 to ReadyBeforeValidCycles loop
+    wait until Clk = '1';
+  end loop;
+
+  -- Valid setzen und danach wieder zurücksetzen
+  Valid <= '1' after tpd_Clk_Valid;
+  wait until Clk = '1';
+  Valid <= '0' after tpd_Clk_Valid;
   end procedure DoAvalonStreamValidHandshake;
 
   ------------------------------------------------------------

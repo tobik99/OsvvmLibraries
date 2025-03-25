@@ -45,12 +45,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library osvvm;
-context osvvm.OsvvmContext;
-use osvvm.ScoreboardPkg_slv.all;
-
 library osvvm_avalonst;
-context osvvm_avalonst.AvalonST_context;
+context osvvm_avalonst.AvalonStreamContext;
 
 entity AvalonST_TestCtrl is
   port (

@@ -14,13 +14,14 @@ context OSVVM_Common.OsvvmCommonContext;
 package AvalonStreamOptionsPkg is
   type AvalonStreamOptionsType is (-- OptVal
     TRANSMIT_VALID_DELAY_CYCLES,       -- Integer
-    TRANSMIT_VALID_BURST_DELAY_CYCLES, -- Integer
-    TRANSMIT_READY_TIME_OUT,           -- Integer
-    RECEIVE_READY_BEFORE_VALID,        -- Integer
-    RECEIVE_READY_DELAY_CYCLES,        -- Integer
-    RECEIVE_READY_WAIT_FOR_GET,        -- boolean
-    DROP_UNDRIVEN,
-    THE_END
+   -- TRANSMIT_VALID_BURST_DELAY_CYCLES, -- Integer
+   -- TRANSMIT_READY_TIME_OUT,           -- Integer
+    --RECEIVE_READY_BEFORE_VALID        -- Integer
+   READY_BEFORE_VALID_DELAY_CYCLES  -- Integer
+   -- RECEIVE_READY_DELAY_CYCLES--,        -- Integer
+    --RECEIVE_READY_WAIT_FOR_GET,        -- boolean
+    --DROP_UNDRIVEN,
+    --THE_END
   );
   procedure SetAvalonStreamOptions (
     signal TransRec : inout StreamRecType;
