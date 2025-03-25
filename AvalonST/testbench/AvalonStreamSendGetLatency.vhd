@@ -1,8 +1,12 @@
+library osvvm_avalonst;
+context osvvm_avalonst.AvalonStreamContext;
+
 architecture SendGetLatency of AvalonST_TestCtrl is
    
     signal TestDone   : integer_barrier               := 1;
     signal ExpData    : std_logic_vector(31 downto 0) := x"FFFFFFFF";
     signal RxData     : std_logic_vector(31 downto 0);
+    signal TxOptions : AvalonStreamOptionsType;
   begin
   
     ------------------------------------------------------------
@@ -41,12 +45,10 @@ architecture SendGetLatency of AvalonST_TestCtrl is
     begin
       wait until i_nreset = '1';
       wait for 0 ns;
-  
+      SetAvalonStreamOptions(io_tx_trans_rec, RECEIVE_READY_DELAY_CYCLES, 2);
       SendAsync(io_tx_trans_rec, ExpData);
-      --SendAsync(io_tx_trans_rec, ExpData);
+      
       WaitForClock(io_tx_trans_rec, 2);
-      --Send(io_tx_trans_rec, ExpData);
-      --Send(io_tx_trans_rec, ExpData);
       WaitForBarrier(TestDone);
       wait;
     end process transmitter_proc;

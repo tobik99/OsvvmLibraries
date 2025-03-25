@@ -51,7 +51,7 @@ library osvvm;
 context osvvm.OsvvmContext;
 
 library osvvm_avalonst;
-context osvvm_avalonst.AvalonST_context;
+context osvvm_avalonst.AvalonStreamContext;
 use osvvm_avalonst.AvalonStreamReceiver;
 use osvvm_avalonst.AvalonStreamTransmitter;
 

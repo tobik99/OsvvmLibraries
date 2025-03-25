@@ -9,7 +9,7 @@ context osvvm.OsvvmContext;
 use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_avalonst;
-context osvvm_avalonst.AvalonST_context;
+context osvvm_avalonst.AvalonStreamContext;
 
 entity AvalonStreamReceiver is
   generic (

@@ -9,8 +9,7 @@ context osvvm.OsvvmContext;
 use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_avalonst;
-context osvvm_avalonst.AvalonST_context;
---use osvvm_avalonst.AvalonST_tb_pkg.all; -- for rec_avalon_stream
+context osvvm_avalonst.AvalonStreamContext;
 
 entity AvalonStreamTransmitter is
   generic (

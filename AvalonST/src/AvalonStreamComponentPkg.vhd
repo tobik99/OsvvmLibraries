@@ -51,7 +51,7 @@ context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
 
 --use work.AvalonST_tb_pkg.all;
 
-package AvalonST_source_component_pkg is
+package AvalonStreamComponentPkg is
   component AvalonStreamingSource is
     generic (
       MODEL_ID_NAME      : string  := "";
@@ -99,12 +99,12 @@ package AvalonST_source_component_pkg is
     constant TimeOutPeriod    : in time           := - 1 sec
   );
 
-end package AvalonST_source_component_pkg;
+end package AvalonStreamComponentPkg;
 
 -- /////////////////////////////////////////////////////////////////////////////////////////
 -- /////////////////////////////////////////////////////////////////////////////////////////
 
-package body AvalonST_source_component_pkg is
+package body AvalonStreamComponentPkg is
 
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
@@ -202,4 +202,4 @@ package body AvalonST_source_component_pkg is
     end if;
   end procedure DoAvalonStreamReadyHandshake;
 
-end package body AvalonST_source_component_pkg;
+end package body AvalonStreamComponentPkg;
