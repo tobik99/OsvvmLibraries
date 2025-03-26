@@ -16,7 +16,7 @@ architecture bhv of AvalonStreamTestHarness is
   constant tpd         : time := 2 ns;
 
   signal clk    : std_logic := '1';
-  signal nreset : std_logic;
+  signal nreset : std_logic := '0';
 
   signal ready : std_logic;
   signal data  : std_logic_vector(31 downto 0);

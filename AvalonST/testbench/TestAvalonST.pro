@@ -49,5 +49,6 @@ analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetTe
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetLatency.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestHarness.vhd
 
+SetSaveWaves true
 simulate AvalonStreamTestHarness
 #RunTest AvalonST_test_harness

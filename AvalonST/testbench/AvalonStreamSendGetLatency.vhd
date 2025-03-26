@@ -32,7 +32,7 @@ architecture SendGetLatency of AvalonST_TestCtrl is
       -- Wait for test to finish
       -- every process has to call its own TestDone, otherwise the watchdog will execute
       WaitForBarrier(TestDone, 3 ms);
-      AlertIf(now >= 20 ms, "Test finished due to timeout");
+      AlertIf(now >= 200 ns, "Test finished due to timeout");
       AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
   
       EndOfTestReports;
@@ -45,7 +45,7 @@ architecture SendGetLatency of AvalonST_TestCtrl is
     begin
       wait until i_nreset = '1';
       wait for 0 ns;
-      SetAvalonStreamOptions(io_tx_trans_rec, READY_BEFORE_VALID_DELAY_CYCLES, 3);
+      SetAvalonStreamOptions(io_tx_trans_rec, READY_BEFORE_VALID_DELAY_CYCLES, 1);
       SendAsync(io_tx_trans_rec, ExpData);
       
       WaitForClock(io_tx_trans_rec, 2);

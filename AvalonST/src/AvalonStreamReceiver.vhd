@@ -54,7 +54,7 @@ architecture bhv of AvalonStreamReceiver is
   -- Verification Component Configuration
   signal ReceiveReadyBeforeValid : boolean := TRUE;
   signal ReceiveReadyDelayCycles : integer := 0;
-  signal WaitForGet              : boolean := FALSE;
+  signal WaitForGet              : boolean := TRUE;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -83,7 +83,6 @@ begin
     variable FifoWordCount, CheckWordCount   : integer;
     variable Data, ExpectedData, PopData     : std_logic_vector(i_data'range);
   begin
-    o_ready <= '1';
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
     TransactionDispatcherLoop : loop
@@ -153,13 +152,13 @@ begin
           end if;
 
           --------------------------------
-          wait until rising_edge(i_clk) and i_valid = '1';
-          io_trans_rec.DataFromModel <= SafeResize(ModelID, Data, io_trans_rec.DataFromModel'length);
-          o_ready                    <= '0' after tpd_Clk_oReady;
-          wait for 0 ns;
-          Log(ModelID, "Avalon Stream Get." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataFromModel, Data'length))), INFO);
-          wait until rising_edge(i_clk);
-          o_ready <= '1' after tpd_Clk_oReady;
+          -- wait until rising_edge(i_clk) and i_valid = '1';
+          -- io_trans_rec.DataFromModel <= SafeResize(ModelID, Data, io_trans_rec.DataFromModel'length);
+          -- o_ready                    <= '0' after tpd_Clk_oReady;
+          -- wait for 0 ns;
+          -- Log(ModelID, "Avalon Stream Get." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataFromModel, Data'length))), INFO);
+          -- wait until rising_edge(i_clk);
+          -- o_ready <= '1' after tpd_Clk_oReady;
         when WAIT_FOR_TRANSACTION =>
           -- Receiver either blocks or does "try" operations
           -- There are no operations in flight
@@ -189,7 +188,8 @@ begin
   ReceiveHandler : process
     variable Data : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
-    variable ReadyBeforeValid, ReadyDelayCycles : integer;
+    variable ReadyBeforeValid : integer := 0;
+    variable ReadyDelayCycles : integer := 1;
   begin
     -- Initialize
     o_ready <= '0';
@@ -206,9 +206,7 @@ begin
           wait until (WordRequestCount > WordReceiveCount) or not WaitForGet;
         end if;
       end if;
-      -- Deprecated static settings
-      ReadyBeforeValid := to_integer(not ReceiveReadyBeforeValid);
-      ReadyDelayCycles := ReceiveReadyDelayCycles;
+
       ---------------------
       DoAvalonStreamReadyHandshake (
       ---------------------
