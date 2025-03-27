@@ -76,14 +76,17 @@ package AvalonStreamComponentPkg is
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
-    signal Clk              : in std_logic;
-    signal Valid            : out std_logic;
-    signal Ready            : in std_logic;
+    signal Clk                      : in std_logic;
+    signal Valid                    : out std_logic;
+    signal Ready                    : in std_logic;
+    signal StartOfNewStream         : in integer;
+    constant TransmitRequestCount   : in integer;
+    constant TransmitDoneCount      : in integer;
     constant ReadyBeforeValidCycles : in integer;
-    constant tpd_Clk_Valid  : in time;
-    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage : in string         := "";
-    constant TimeOutPeriod  : in time           := - 1 sec
+    constant tpd_Clk_Valid          : in time;
+    constant AlertLogID             : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage         : in string         := "";
+    constant TimeOutPeriod          : in time           := - 1 sec
   );
 
   ------------------------------------------------------------
@@ -92,6 +95,8 @@ package AvalonStreamComponentPkg is
     signal Clk                : in std_logic;
     signal Valid              : in std_logic;
     signal Ready              : inout std_logic;
+    constant WordRequestCount : in integer;
+    constant WordReceiveCount : in integer;
     constant ReadyBeforeValid : in boolean;
     constant ReadyDelayCycles : in time;
     constant tpd_Clk_Ready    : in time;
@@ -110,43 +115,66 @@ package body AvalonStreamComponentPkg is
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
-    signal Clk              : in std_logic;
-    signal Valid            : out std_logic;
-    signal Ready            : in std_logic;
+    signal Clk                      : in std_logic;
+    signal Valid                    : out std_logic;
+    signal Ready                    : in std_logic;
+    signal StartOfNewStream         : in integer;
+    constant TransmitRequestCount   : in integer;
+    constant TransmitDoneCount      : in integer;
     constant ReadyBeforeValidCycles : in integer;
-    constant tpd_Clk_Valid  : in time;
-    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage : in string         := "";
-    constant TimeOutPeriod  : in time           := - 1 sec
+    constant tpd_Clk_Valid          : in time;
+    constant AlertLogID             : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage         : in string         := "";
+    constant TimeOutPeriod          : in time           := - 1 sec
   ) is
   begin
+    if StartOfNewStream = 1 and ReadyBeforeValidCycles > 0 then
+      wait for 0 ns;
+      -- Warte auf Ready innerhalb des TimeOuts
+      if TimeOutPeriod > 0 sec then
+        wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
+      else
+        wait on Clk until Clk = '1' and Ready = '1';
+      end if;
 
-   -- Warte auf Ready innerhalb des TimeOuts
-  if TimeOutPeriod > 0 sec then
-    wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
-  else
-    wait on Clk until Clk = '1' and Ready = '1';
-  end if;
+      -- Falls Ready nicht gesetzt wurde, Fehler melden
+      if Ready /= '1' then
+        Alert(
+        AlertLogID,
+        TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
+        FAILURE
+        );
+        wait until Clk = '1';
+      end if;
+      for i in 1 to ReadyBeforeValidCycles loop -- wait for ready_cycles if configured!
+        wait until Clk = '1';
+      end loop;
 
-  -- Falls Ready nicht gesetzt wurde, Fehler melden
-  if Ready /= '1' then
-    Alert(
-      AlertLogID,
-      TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
-      FAILURE
-    );
-    wait until Clk = '1';
-  end if;
+      Valid <= '1' after tpd_Clk_Valid;
 
-  -- Warte die spezifizierte Anzahl an Ready-Zyklen
-  for i in 1 to ReadyBeforeValidCycles loop
-    wait until Clk = '1';
-  end loop;
+    else
+      Valid <= '1' after tpd_Clk_Valid;
 
-  -- Valid setzen und danach wieder zurücksetzen
-  Valid <= '1' after tpd_Clk_Valid;
-  wait until Clk = '1';
-  Valid <= '0' after tpd_Clk_Valid;
+      -- Either ready allowance is set, or we have to stop the transmission immediately (backpressure)
+      if (Ready /= '1') then
+        -- Warte auf Ready innerhalb des TimeOuts
+        if TimeOutPeriod > 0 sec then
+          wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
+          -- Falls Ready nicht gesetzt wurde, Fehler melden
+          if Ready /= '1' then
+            Alert(
+            AlertLogID,
+            TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
+            FAILURE
+            );
+            wait until Clk = '1';
+          end if;
+        else
+          wait on Clk until Clk = '1' and Ready = '1';
+        end if;
+      end if;
+    end if;
+    wait on Clk until Clk = '1';
   end procedure DoAvalonStreamValidHandshake;
 
   ------------------------------------------------------------
@@ -155,6 +183,8 @@ package body AvalonStreamComponentPkg is
     signal Clk                : in std_logic;
     signal Valid              : in std_logic;
     signal Ready              : inout std_logic;
+    constant WordRequestCount : in integer;
+    constant WordReceiveCount : in integer;
     constant ReadyBeforeValid : in boolean;
     constant ReadyDelayCycles : in time;
     constant tpd_Clk_Ready    : in time;
@@ -202,13 +232,12 @@ package body AvalonStreamComponentPkg is
       );
     end if;
 
-    -- End of operation
-    Ready <= '0' after tpd_Clk_Ready;
-
-    if Valid /= '1' then
-      -- TimeOut or Valid deasserted after before Ready asserted
-      wait until Clk = '1';
+    if WordRequestCount > WordReceiveCount + 1 then
+      Ready <= '1' after tpd_Clk_Ready; -- can receive more data
+    else
+      Ready <= '0' after tpd_Clk_Ready; -- end of operation
     end if;
+
   end procedure DoAvalonStreamReadyHandshake;
 
 end package body AvalonStreamComponentPkg;

@@ -13,29 +13,32 @@ context osvvm_avalonst.AvalonStreamContext;
 
 entity AvalonStreamTransmitter is
   generic (
-    MODEL_ID_NAME                 : string                  := "";
-   -- AVALON_STREAM_CHANNELS        : integer range 1 to 128  := 1;
+    MODEL_ID_NAME : string := "";
+    -- AVALON_STREAM_CHANNELS        : integer range 1 to 128  := 1;
     --AVALON_STREAM_ERROR           : integer range 1 to 256  := 1;
     AVALON_STREAM_READY_LATENCY   : integer                 := 1; -- default behavior
     AVALON_STREAM_READY_ALLOWANCE : integer                 := AVALON_STREAM_READY_LATENCY;
     AVALON_STREAM_DATA_WIDTH      : integer range 1 to 8192 := 32;
-   -- AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
-    DEFAULT_DELAY                 : time                    := 1 ns;
-    tpd_Clk_Valid                 : time                    := DEFAULT_DELAY;
-    tperiod_Clk    : time := 10 ns ;
-    tpd_Clk_oData                 : time                    := DEFAULT_DELAY
+    -- AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
+    DEFAULT_DELAY : time := 1 ns;
+    tpd_Clk_Valid : time := DEFAULT_DELAY;
+    tperiod_Clk   : time := 10 ns;
+    tpd_Clk_oData : time := DEFAULT_DELAY
     --DEFAULT_CHANNELS   : integer := 1
   );
   port (
-    i_clk    : in std_logic;
+    Clk      : in std_logic;
     i_nreset : in std_logic;
     -- DUT signals
-    o_valid : out std_logic := '0';
-    o_data  : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    o_valid       : out std_logic := '0';
+    o_data        : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    StartOfPacket : out std_logic := '0';
+    EndOfPacket   : out std_logic := '0';
+    --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
     i_ready : in std_logic;
 
     -- testbench record
-    io_trans_rec : inout StreamRecType
+    TransRec : inout StreamRecType
   );
   -- Use MODEL_ID_NAME Generic if set, otherwise,
   -- use model instance label (preferred if set as entityname_1)
@@ -49,9 +52,10 @@ architecture bhv of AvalonStreamTransmitter is
   signal ModelID, BusFailedID                    : AlertLogIDType;
   signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
+  signal StartOfNewStream                        : integer := 1;
 
   -- Verification Component Configuration
-  signal ValidDelayCyclesOption      : integer := 0 ;
+  signal ValidDelayCyclesOption            : integer := 0;
   signal ReadyBeforeValidDelayCyclesOption : integer := 0;
 begin
   ------------------------------------------------------------
@@ -76,67 +80,80 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable Data : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable Data            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable NumberTransfers : integer;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
-      Clk => i_clk,
-      Rdy => io_trans_rec.Rdy,
-      Ack => io_trans_rec.Ack
+      Clk => Clk,
+      Rdy => TransRec.Rdy,
+      Ack => TransRec.Ack
       );
 
-      case io_trans_rec.Operation is
+      case TransRec.Operation is
         when SEND | SEND_ASYNC =>
-          Data := SafeResize(ModelID, io_trans_rec.DataToModel, Data'length);
+          Data := SafeResize(ModelID, TransRec.DataToModel, Data'length);
           Push(TransmitFifo, Data);
           Increment(TransmitRequestCount);
           wait for 0 ns;
-          if IsBlocking(io_trans_rec.Operation) then
+          if IsBlocking(TransRec.Operation) then
             log("waiting until blocked send completed");
             wait until TransmitRequestCount = TransmitDoneCount;
             log("async wait completed");
           end if;
+        when SEND_BURST | SEND_BURST_ASYNC =>
+          NumberTransfers := TransRec.IntToModel;
+          TransmitRequestCount <= TransmitRequestCount + NumberTransfers;
 
+          for i in NumberTransfers - 1 downto 0 loop
+            Data := Pop(TransRec.BurstFifo);
+            Push(TransmitFifo, Data); --'1' for signalling its more than one transfer (burst)
+          end loop;
+          wait for 0 ns;
+          if IsBlocking(TransRec.Operation) then
+            wait until TransmitRequestCount = TransmitDoneCount;
+          end if;
         when WAIT_FOR_TRANSACTION =>
           if TransmitRequestCount /= TransmitDoneCount then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
 
         when WAIT_FOR_CLOCK =>
-          WaitForClock(i_clk, io_trans_rec.IntToModel);
+          WaitForClock(Clk, TransRec.IntToModel);
 
         when GET_TRANSACTION_COUNT =>
-          io_trans_rec.IntFromModel <= TransmitDoneCount;
+          TransRec.IntFromModel <= TransmitDoneCount;
 
         when MULTIPLE_DRIVER_DETECT =>
-          Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(io_trans_rec.Rdy), FAILURE);
+          Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(TransRec.Rdy), FAILURE);
 
         when SET_MODEL_OPTIONS =>
-          case AvalonStreamOptionsType'val(io_trans_rec.Options) is
+          case AvalonStreamOptionsType'val(TransRec.Options) is
             when TRANSMIT_VALID_DELAY_CYCLES =>
-              ValidDelayCyclesOption <= io_trans_rec.IntToModel;
-              when READY_BEFORE_VALID_DELAY_CYCLES =>
-              ReadyBeforeValidDelayCyclesOption <= io_trans_rec.IntToModel;
+              ValidDelayCyclesOption <= TransRec.IntToModel;
+            when READY_BEFORE_VALID_DELAY_CYCLES =>
+              ReadyBeforeValidDelayCyclesOption <= TransRec.IntToModel;
+
               --UseCoverageDelays <= FALSE; -- todo, what is this for?
 
             when others =>
-              Alert(ModelID, "SetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(io_trans_rec.Options)), FAILURE);
+              Alert(ModelID, "SetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
               wait for 0 ns;
           end case;
-
+          wait for 0 ns;
         when GET_MODEL_OPTIONS =>
-          case AvalonStreamOptionsType'val(io_trans_rec.Options) is
+          case AvalonStreamOptionsType'val(TransRec.Options) is
             when TRANSMIT_VALID_DELAY_CYCLES =>
-            io_trans_rec.IntFromModel <= ValidDelayCyclesOption;
+              TransRec.IntFromModel <= ValidDelayCyclesOption;
             when READY_BEFORE_VALID_DELAY_CYCLES =>
-            io_trans_rec.IntFromModel <= ReadyBeforeValidDelayCyclesOption ;
+              TransRec.IntFromModel <= ReadyBeforeValidDelayCyclesOption;
             when others =>
-              Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(io_trans_rec.Options)), FAILURE);
+              Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
           end case;
         when others =>
-          Alert(ModelID, "Unimplemented Transaction: " & to_string(io_trans_rec.Operation), FAILURE);
+          Alert(ModelID, "Unimplemented Transaction: " & to_string(TransRec.Operation), FAILURE);
 
       end case;
     end loop TransactionDispatcherLoop;
@@ -145,6 +162,7 @@ begin
   TransmitHandler : process is
     variable valid : std_logic;
     variable data  : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+
   begin
     -- initialize outputs
     o_valid <= '0';
@@ -159,12 +177,27 @@ begin
       -- Get Transaction
       (data) := Pop(TransmitFifo);
       o_data <= data;
-      DoAvalonStreamValidHandshake(i_clk, o_valid, i_ready, ReadyBeforeValidDelayCyclesOption, tpd_Clk_Valid, BusFailedID, "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk); -- the wait statement for o_data is covered in here;
-     
-      -- when done
+      Log(ModelID,
+      "AvalonStream Transmit." &
+      "  Data: " & to_hxstring(data) &
+      "  Operation# " & to_string (TransmitDoneCount + 1),
+      DEBUG
+      );
+      DoAvalonStreamValidHandshake(Clk, o_valid, i_ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
+      ReadyBeforeValidDelayCyclesOption, tpd_Clk_Valid, BusFailedID,
+      "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk);
+
+
+      if (TransmitDoneCount + 1 = TransmitRequestCount) then
+        StartOfNewStream <= 1;
+        o_valid <= '0' after tpd_Clk_Valid;
+      else
+        StartOfNewStream <= 0;
+      end if;
       Increment(TransmitDoneCount);
       wait for 0 ns;
-      -- Get Transaction
+    
+      wait for 0 ns;
 
     end loop;
   end process TransmitHandler;

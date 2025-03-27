@@ -56,12 +56,12 @@ begin
       tpd_Clk_oData      => 1 ns
     )
     port map(
-      i_clk        => clk,
+      Clk        => clk,
       i_nreset     => nreset,
       o_valid      => valid,
       o_data       => data,
       i_ready      => ready,
-      io_trans_rec => tx_trans_rec
+      TransRec =>  tx_trans_rec
     );
 
   AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver(bhv)

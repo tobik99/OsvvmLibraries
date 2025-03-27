@@ -150,15 +150,6 @@ begin
               );
             end if;
           end if;
-
-          --------------------------------
-          -- wait until rising_edge(i_clk) and i_valid = '1';
-          -- io_trans_rec.DataFromModel <= SafeResize(ModelID, Data, io_trans_rec.DataFromModel'length);
-          -- o_ready                    <= '0' after tpd_Clk_oReady;
-          -- wait for 0 ns;
-          -- Log(ModelID, "Avalon Stream Get." & "data: " & to_hxstring(to_x01(SafeResize(io_trans_rec.DataFromModel, Data'length))), INFO);
-          -- wait until rising_edge(i_clk);
-          -- o_ready <= '1' after tpd_Clk_oReady;
         when WAIT_FOR_TRANSACTION =>
           -- Receiver either blocks or does "try" operations
           -- There are no operations in flight
@@ -189,7 +180,7 @@ begin
     variable Data : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
     variable ReadyBeforeValid : integer := 0;
-    variable ReadyDelayCycles : integer := 1;
+    variable ReadyDelayCycles : integer := 0;
   begin
     -- Initialize
     o_ready <= '0';
@@ -213,6 +204,8 @@ begin
       Clk              => i_clk,
       Valid            => i_valid,
       Ready            => o_ready,
+      WordRequestCount => WordRequestCount,
+      WordReceiveCount => WordReceiveCount,
       ReadyBeforeValid => ReadyBeforeValid = 0,
       ReadyDelayCycles => ReadyDelayCycles * tperiod_Clk,
       tpd_Clk_Ready    => tpd_Clk_oReady,
@@ -226,8 +219,8 @@ begin
 
       -- Log this operation
       Log(ModelID,
-      "Axi Stream Receive." &
-      "  TData: " & to_hxstring(i_data) &
+      "AvalonStream Receive." &
+      "  Data: " & to_hxstring(i_data) &
       "  Operation# " & to_string (WordReceiveCount + 1),
       DEBUG
       );
