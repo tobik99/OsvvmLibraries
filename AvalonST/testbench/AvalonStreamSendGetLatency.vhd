@@ -53,6 +53,8 @@ begin
     SetAvalonStreamOptions(StreamTxRec, READY_BEFORE_VALID_DELAY_CYCLES, 0);
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
+    wait for 50 ns; -- introduce another delay to see if ready is only asserted when valid
+
     ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
     for i in 0 to 3 loop
       SendAsync(StreamTxRec, ExpData);

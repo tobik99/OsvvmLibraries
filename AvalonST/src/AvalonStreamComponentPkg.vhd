@@ -201,6 +201,8 @@ package body AvalonStreamComponentPkg is
 
     if ReadyBeforeValid then
       Ready <= transport '1' after ReadyDelayCycles + tpd_Clk_Ready;
+    else
+      Ready <= transport '0' after ReadyDelayCycles + tpd_Clk_Ready; -- todo see if this works see data shett avalon
     end if;
 
     -- Wait to Receive Transaction
