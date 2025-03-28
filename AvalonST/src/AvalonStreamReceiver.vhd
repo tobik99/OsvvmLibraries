@@ -25,15 +25,15 @@ entity AvalonStreamReceiver is
     tpd_Clk_oReady                : time                    := DEFAULT_DELAY
   );
   port (
-    i_clk    : in std_logic;
-    i_nreset : in std_logic;
+    Clk    : in std_logic;
+    Reset : in std_logic;
     -- DUT signals
-    i_valid : in std_logic := '0';
-    i_data  : in std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    o_ready : out std_logic;
+    Valid : in std_logic := '0';
+    Data  : in std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    Ready : out std_logic;
 
     -- testbench record
-    io_trans_rec : inout StreamRecType
+    TransRec : inout StreamRecType
   );
 
   -- Use MODEL_ID_NAME Generic if set, otherwise,
@@ -51,9 +51,9 @@ architecture bhv of AvalonStreamReceiver is
   signal WordRequestCount                      : integer := 0;
   signal WordReceiveCount                      : integer := 0;
   signal ReceiveByteCount, TransferByteCount   : integer := 0;
+  signal StartOfNewStream                        : integer := 1;
+
   -- Verification Component Configuration
-  signal ReceiveReadyBeforeValid : boolean := TRUE;
-  signal ReceiveReadyDelayCycles : integer := 0;
   signal WaitForGet              : boolean := TRUE;
 begin
   ------------------------------------------------------------
@@ -76,20 +76,20 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    alias Operation                          : StreamOperationType is io_trans_rec.Operation;
+    alias Operation                          : StreamOperationType is TransRec.Operation;
     variable DispatcherReceiveCount          : integer := 0;
     variable WordCount                       : integer;
     variable TryWordWaiting, TryBurstWaiting : boolean;
     variable FifoWordCount, CheckWordCount   : integer;
-    variable Data, ExpectedData, PopData     : std_logic_vector(i_data'range);
+    variable vData, ExpectedData, PopData     : std_logic_vector(Data'range);
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
-      Clk => i_clk,
-      Rdy => io_trans_rec.Rdy,
-      Ack => io_trans_rec.Ack
+      Clk => Clk,
+      Rdy => TransRec.Rdy,
+      Ack => TransRec.Ack
       );
 
       case Operation is
@@ -101,9 +101,9 @@ begin
             end if;
             TryWordWaiting := TRUE;
             -- Return if no data
-            io_trans_rec.BoolFromModel  <= FALSE;
-            io_trans_rec.DataFromModel  <= (io_trans_rec.DataFromModel'range  => '0');
-            io_trans_rec.ParamFromModel <= (io_trans_rec.ParamFromModel'range => '0');
+            TransRec.BoolFromModel  <= FALSE;
+            TransRec.DataFromModel  <= (TransRec.DataFromModel'range  => '0');
+            TransRec.ParamFromModel <= (TransRec.ParamFromModel'range => '0');
             wait for 0 ns;
           else
             if not TryWordWaiting then
@@ -113,18 +113,18 @@ begin
             DispatcherReceiveCount := DispatcherReceiveCount + 1;
 
             -- Get data
-            io_trans_rec.BoolFromModel <= TRUE;
+            TransRec.BoolFromModel <= TRUE;
             if IsEmpty(ReceiveFifo) then
               -- Wait for data
               WaitForToggle(WordReceiveCount);
             end if;
             
-            (Data) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+            (vData) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
-            io_trans_rec.DataFromModel <= SafeResize(ModelID, Data, io_trans_rec.DataFromModel'length);
+            TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
 
             if IsCheck(Operation) then
-              ExpectedData := SafeResize(ModelID, io_trans_rec.DataToModel, AVALON_STREAM_DATA_WIDTH);
+              ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
               -- ExpectedParam := UpdateOptions(
               --   Param     => SafeResize(ModelID, TransRec.ParamToModel, ExpectedParam'length),
               --   ParamID   => ParamID,
@@ -135,18 +135,18 @@ begin
               --   );
               AffirmIf(DataCheckID,
               --                (Data ?= ExpectedData and Param ?= ExpectedParam) = '1',
-              (MetaMatch(Data, ExpectedData)),
+              (MetaMatch(vData, ExpectedData)),
               "Operation# " & to_string (DispatcherReceiveCount) & " " &
-              " Received.  Data: " & to_hxstring(Data),
+              " Received.  Data: " & to_hxstring(vData),
               " Expected.  Data: " & to_hxstring(ExpectedData),
-              io_trans_rec.BoolToModel or IsLogEnabled(ModelID, INFO)
+              TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
               );
             else
               Log(ModelID,
               "Word Receive. " &
               " Operation# " & to_string (DispatcherReceiveCount) & " " &
-              " Data: " & to_hxstring(Data),
-              INFO, io_trans_rec.BoolToModel
+              " Data: " & to_hxstring(vData),
+              INFO, TransRec.BoolToModel
               );
             end if;
           end if;
@@ -158,32 +158,32 @@ begin
           wait for 0 ns;
 
         when WAIT_FOR_CLOCK =>
-          WaitForClock(i_clk, io_trans_rec.IntToModel);
+          WaitForClock(Clk, TransRec.IntToModel);
 
         when GET_TRANSACTION_COUNT =>
           --!! This is GetTotalTransactionCount vs. GetPendingTransactionCount
           --!!  Get Pending Get Count = GetFifoCount(ReceiveFifo)
-          io_trans_rec.IntFromModel <= WordReceiveCount;
+          TransRec.IntFromModel <= WordReceiveCount;
           wait for 0 ns;
 
         when MULTIPLE_DRIVER_DETECT =>
-          Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(io_trans_rec.Rdy), FAILURE);
+          Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(TransRec.Rdy), FAILURE);
 
         when others =>
-          Alert(ModelID, "Unimplemented Transaction: " & to_string(io_trans_rec.Operation), FAILURE);
+          Alert(ModelID, "Unimplemented Transaction: " & to_string(TransRec.Operation), FAILURE);
 
       end case;
     end loop TransactionDispatcherLoop;
   end process TransactionDispatcher;
 
   ReceiveHandler : process
-    variable Data : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
     variable ReadyBeforeValid : integer := 0;
     variable ReadyDelayCycles : integer := 0;
   begin
     -- Initialize
-    o_ready <= '0';
+    Ready <= '0';
     wait for 0 ns; -- Allow Cov models to initialize 
     wait for 0 ns; -- Allow Cov models to initialize 
 
@@ -201,9 +201,9 @@ begin
       ---------------------
       DoAvalonStreamReadyHandshake (
       ---------------------
-      Clk              => i_clk,
-      Valid            => i_valid,
-      Ready            => o_ready,
+      Clk              => Clk,
+      Valid            => Valid,
+      Ready            => Ready,
       WordRequestCount => WordRequestCount,
       WordReceiveCount => WordReceiveCount,
       ReadyBeforeValid => ReadyBeforeValid = 0,
@@ -212,22 +212,30 @@ begin
       AlertLogID       => ModelID
       );
 
-      Data := to_x01(i_data);
+      vData := to_x01(Data);
       
       -- capture this transaction
-      push(ReceiveFifo, Data);
+      push(ReceiveFifo, vData);
 
       -- Log this operation
       Log(ModelID,
       "AvalonStream Receive." &
-      "  Data: " & to_hxstring(i_data) &
+      "  Data: " & to_hxstring(Data) &
       "  Operation# " & to_string (WordReceiveCount + 1),
       DEBUG
       );
 
+      if (WordReceiveCount + 1 = WordRequestCount) then
+        StartOfNewStream <= 1;
+        Ready <= '0' after tpd_Clk_oReady;
+        --Data <= (others => 'U');
+      else
+        StartOfNewStream <= 0;
+      end if;
       -- Signal completion
       increment(WordReceiveCount);
       wait for 0 ns;
+      
     end loop ReceiveLoop;
   end process ReceiveHandler;
 end bhv;

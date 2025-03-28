@@ -51,12 +51,12 @@ context osvvm_avalonst.AvalonStreamContext;
 entity AvalonST_TestCtrl is
   port (
     -- Global Signal Interface
-    i_nreset : in std_logic;
-    i_clk    : in std_logic;
+    Reset : in std_logic;
+    Clk    : in std_logic;
 
     -- Record Interface
-    io_tx_trans_rec : inout StreamRecType;
-    io_rx_trans_rec : inout StreamRecType
+    StreamTxRec : inout StreamRecType;
+    StreamRxRec : inout StreamRecType
   );
 end AvalonST_TestCtrl;
 

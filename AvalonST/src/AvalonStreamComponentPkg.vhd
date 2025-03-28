@@ -152,9 +152,13 @@ package body AvalonStreamComponentPkg is
 
       Valid <= '1' after tpd_Clk_Valid;
 
+      -----------------------
+    elsif StartOfNewStream = 1 and ReadyBeforeValidCycles = 0 then
+      Valid <= '1' after tpd_Clk_Valid;
+      
     else
       Valid <= '1' after tpd_Clk_Valid;
-
+  
       -- Either ready allowance is set, or we have to stop the transmission immediately (backpressure)
       if (Ready /= '1') then
         -- Warte auf Ready innerhalb des TimeOuts
@@ -172,6 +176,7 @@ package body AvalonStreamComponentPkg is
         else
           wait on Clk until Clk = '1' and Ready = '1';
         end if;
+        Valid <= '0'; -- todo ready allowance ist noch ignoriert
       end if;
     end if;
     wait on Clk until Clk = '1';
@@ -232,11 +237,7 @@ package body AvalonStreamComponentPkg is
       );
     end if;
 
-    if WordRequestCount > WordReceiveCount + 1 then
-      Ready <= '1' after tpd_Clk_Ready; -- can receive more data
-    else
-      Ready <= '0' after tpd_Clk_Ready; -- end of operation
-    end if;
+    
 
   end procedure DoAvalonStreamReadyHandshake;
 

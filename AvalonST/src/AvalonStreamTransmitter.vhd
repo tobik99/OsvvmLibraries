@@ -28,14 +28,14 @@ entity AvalonStreamTransmitter is
   );
   port (
     Clk      : in std_logic;
-    i_nreset : in std_logic;
+    Reset : in std_logic;
     -- DUT signals
-    o_valid       : out std_logic := '0';
-    o_data        : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    Valid       : out std_logic := '0';
+    Data        : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     StartOfPacket : out std_logic := '0';
     EndOfPacket   : out std_logic := '0';
     --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
-    i_ready : in std_logic;
+    Ready : in std_logic;
 
     -- testbench record
     TransRec : inout StreamRecType
@@ -80,7 +80,7 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable Data            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable NumberTransfers : integer;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
@@ -94,8 +94,8 @@ begin
 
       case TransRec.Operation is
         when SEND | SEND_ASYNC =>
-          Data := SafeResize(ModelID, TransRec.DataToModel, Data'length);
-          Push(TransmitFifo, Data);
+          vData := SafeResize(ModelID, TransRec.DataToModel, vData'length);
+          Push(TransmitFifo, vData);
           Increment(TransmitRequestCount);
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
@@ -108,8 +108,8 @@ begin
           TransmitRequestCount <= TransmitRequestCount + NumberTransfers;
 
           for i in NumberTransfers - 1 downto 0 loop
-            Data := Pop(TransRec.BurstFifo);
-            Push(TransmitFifo, Data); --'1' for signalling its more than one transfer (burst)
+            vData := Pop(TransRec.BurstFifo);
+            Push(TransmitFifo, vData); --'1' for signalling its more than one transfer (burst)
           end loop;
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
@@ -160,13 +160,13 @@ begin
   end process TransactionDispatcher;
 
   TransmitHandler : process is
-    variable valid : std_logic;
-    variable data  : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vValid : std_logic;
+    variable vData  : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
   begin
     -- initialize outputs
-    o_valid <= '0';
-    o_data  <= (data'range => 'X');
+    Valid <= '0';
+    Data  <= (vData'range => 'X');
     wait for 0 ns;
 
     TransmitLoop : loop
@@ -175,22 +175,23 @@ begin
         WaitForToggle(TransmitRequestCount);
       end if;
       -- Get Transaction
-      (data) := Pop(TransmitFifo);
-      o_data <= data;
+      (vData) := Pop(TransmitFifo);
+      Data <= vData;
       Log(ModelID,
       "AvalonStream Transmit." &
-      "  Data: " & to_hxstring(data) &
+      "  Data: " & to_hxstring(vData) &
       "  Operation# " & to_string (TransmitDoneCount + 1),
       DEBUG
       );
-      DoAvalonStreamValidHandshake(Clk, o_valid, i_ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
+      DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
       ReadyBeforeValidDelayCyclesOption, tpd_Clk_Valid, BusFailedID,
       "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk);
 
 
       if (TransmitDoneCount + 1 = TransmitRequestCount) then
         StartOfNewStream <= 1;
-        o_valid <= '0' after tpd_Clk_Valid;
+        Valid <= '0' after tpd_Clk_Valid;
+        --Data <= (others => 'U');
       else
         StartOfNewStream <= 0;
       end if;

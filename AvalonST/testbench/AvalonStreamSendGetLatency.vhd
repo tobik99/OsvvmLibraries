@@ -4,32 +4,26 @@ context osvvm_avalonst.AvalonStreamContext;
 architecture SendGetLatency of AvalonST_TestCtrl is
 
   signal TestDone  : integer_barrier := 1;
+  signal SyncPoint : integer_barrier := 1;
   signal RxData    : std_logic_vector(31 downto 0);
   signal TxOptions : AvalonStreamOptionsType;
 begin
 
   ------------------------------------------------------------
   -- ControlProc
-  --   Set up AlertLog and wait for end of test
   ------------------------------------------------------------
   ControlProc : process
   begin
-    -- Initialization of test
-
     SetTestName("AvalonStreamSendGetAsync");
-    SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
-    SetLogEnable(INFO, TRUE);   -- Enable INFO logs
+    SetLogEnable(PASSED, TRUE);
+    SetLogEnable(INFO, TRUE);
 
-    -- Wait for simulation elaboration/initialization 
     wait for 0 ns;
     wait for 0 ns;
 
-    -- Wait for Design Reset
-    wait until i_nreset = '1';
+    wait until Reset = '1';
     ClearAlerts;
 
-    -- Wait for test to finish
-    -- every process has to call its own TestDone, otherwise the watchdog will execute
     WaitForBarrier(TestDone, 2000 ns);
     AlertIf(now >= 2000 ns, "Test finished due to timeout");
     AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
@@ -39,65 +33,68 @@ begin
     std.env.stop;
   end process;
 
-  -- Test process
+  ------------------------------------------------------------
+  -- Transmitter Process
+  ------------------------------------------------------------
   transmitter_proc : process
-    variable ExpData : std_logic_vector(31 downto 0) := x"FFFFFFFF";
+    variable ExpData : std_logic_vector(31 downto 0) := (0 => '1', others => '0');
   begin
-    wait until i_nreset = '1';
+    wait until Reset = '1';
     wait for 0 ns;
-    SetAvalonStreamOptions(io_tx_trans_rec, READY_BEFORE_VALID_DELAY_CYCLES, 3);
-
-    for i in 3 downto 0 loop
-      SendAsync(io_tx_trans_rec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) - 256, ExpData'length));
+    SetAvalonStreamOptions(StreamTxRec, READY_BEFORE_VALID_DELAY_CYCLES, 3);
+    WaitForBarrier(SyncPoint);
+    for i in 0 to 3 loop
+      SendAsync(StreamTxRec, ExpData);
+      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
     end loop;
-
-    WaitForClock(io_tx_trans_rec, 20);
-    SendAsync(io_tx_trans_rec, ExpData);
-    WaitForTransaction(io_tx_trans_rec);
-
-    SetAvalonStreamOptions(io_tx_trans_rec, READY_BEFORE_VALID_DELAY_CYCLES, 3);
-    for i in 3 downto 0 loop
-      SendAsync(io_tx_trans_rec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) - 256, ExpData'length));
+    wait for 50 ns;
+    WaitForBarrier(SyncPoint);
+    SendAsync(StreamTxRec, ExpData);
+    SetAvalonStreamOptions(StreamTxRec, READY_BEFORE_VALID_DELAY_CYCLES, 0);
+    wait for 50 ns;
+    WaitForBarrier(SyncPoint);
+    ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+    for i in 0 to 3 loop
+      SendAsync(StreamTxRec, ExpData);
+      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
     end loop;
-
-    WaitForClock(io_tx_trans_rec, 20);
-    SendAsync(io_tx_trans_rec, ExpData);
-    WaitForTransaction(io_tx_trans_rec);
+    wait for 50 ns;
+    WaitForBarrier(SyncPoint);
+    SendAsync(StreamTxRec, ExpData);
+    WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
     wait;
   end process transmitter_proc;
 
+  ------------------------------------------------------------
+  -- Receiver Process
+  ------------------------------------------------------------
   receiver_proc : process
     variable rx_data : std_logic_vector(31 downto 0);
-
-    variable ExpData : std_logic_vector(31 downto 0) := x"FFFFFFFF";
+    variable ExpData : std_logic_vector(31 downto 0) := (0 => '1', others => '0');
   begin
-    wait until i_nreset = '1';
-    -- Get(io_rx_trans_rec, rx_data);
-    -- RxData <= rx_data;
+    wait until Reset = '1';
     wait for 0 ns;
-    for i in 3 downto 0 loop
-      Check(io_rx_trans_rec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) - 256, ExpData'length));
-      -- AffirmIf(ExpData = RxData, "Data: " & to_string(ExpData),
-      -- " /= Expected: " & to_string(RxData));
+    WaitForBarrier(SyncPoint);
+    for i in 0 to 3 loop
+      Check(StreamRxRec, ExpData);
+      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
     end loop;
-    WaitForClock(io_rx_trans_rec, 20);
-    Check(io_rx_trans_rec, ExpData);
-    WaitForTransaction(io_rx_trans_rec);
-
-    for i in 3 downto 0 loop
-      Check(io_rx_trans_rec, ExpData);
-
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) - 256, ExpData'length));
-      -- AffirmIf(ExpData = RxData, "Data: " & to_string(ExpData),
-      -- " /= Expected: " & to_string(RxData));
+    wait for 50 ns;
+    WaitForBarrier(SyncPoint);
+    Check(StreamRxRec, ExpData);
+    wait for 50 ns;
+    WaitForBarrier(SyncPoint);
+    ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+    for i in 0 to 3 loop
+      Check(StreamRxRec, ExpData);
+      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
     end loop;
-    WaitForClock(io_rx_trans_rec, 20);
-    Check(io_rx_trans_rec, ExpData);
-    WaitForTransaction(io_rx_trans_rec);
+    wait for 50 ns;
+    WaitForBarrier(SyncPoint);
+    Check(StreamRxRec, ExpData);
+    WaitForTransaction(StreamRxRec);
+    WaitForClock(StreamRxRec, 5);
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

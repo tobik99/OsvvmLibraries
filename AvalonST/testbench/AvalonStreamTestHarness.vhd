@@ -15,14 +15,14 @@ architecture bhv of AvalonStreamTestHarness is
   constant tperiod_Clk : time := 10 ns;
   constant tpd         : time := 2 ns;
 
-  signal clk    : std_logic := '1';
-  signal nreset : std_logic := '0';
+  signal Clk    : std_logic := '1';
+  signal Reset : std_logic := '0';
 
-  signal ready : std_logic;
-  signal data  : std_logic_vector(31 downto 0);
-  signal valid : std_logic;
+  signal Ready : std_logic;
+  signal Data  : std_logic_vector(31 downto 0);
+  signal Valid : std_logic;
 
-  signal tx_trans_rec, rx_trans_rec : StreamRecType(
+  signal StreamRxRec, StreamTxRec : StreamRecType(
   DataToModel (32 - 1 downto 0),
   DataFromModel (32 - 1 downto 0),
   ParamToModel (32 - 1 downto 0),
@@ -39,10 +39,10 @@ begin
 
   -- create nReset 
   Osvvm.ClockResetPkg.CreateReset (
-  Reset       => nReset,
+  Reset       => Reset,
   ResetActive => '0',
-  Clk         => clk,
-  Period      => 7 * tperiod_Clk,
+  Clk         => Clk,
+  Period      => 2 * tperiod_Clk,
   tpd         => tpd
   );
 
@@ -56,12 +56,12 @@ begin
       tpd_Clk_oData      => 1 ns
     )
     port map(
-      Clk        => clk,
-      i_nreset     => nreset,
-      o_valid      => valid,
-      o_data       => data,
-      i_ready      => ready,
-      TransRec =>  tx_trans_rec
+      Clk        => Clk,
+      Reset     => Reset,
+      Valid      => Valid,
+      Data       => Data,
+      Ready      => Ready,
+      TransRec =>  StreamTxRec
     );
 
   AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver(bhv)
@@ -73,12 +73,12 @@ begin
       tpd_Clk_oReady      => 1 ns
     )
     port map(
-      i_clk        => clk,
-      i_nreset     => nreset,
-      i_valid      => valid,
-      i_data       => data,
-      o_ready      => ready,
-      io_trans_rec => rx_trans_rec
+      Clk        => Clk,
+      Reset     => Reset,
+      Valid      => Valid,
+      Data       => Data,
+      Ready      => Ready,
+      TransRec => StreamRxRec
     );
 
   -- DUT
@@ -86,11 +86,11 @@ begin
   TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(SendGetLatency)
     port map(
       -- Globals
-      i_nreset => nreset,
-      i_clk    => clk,
+      Reset => Reset,
+      Clk    => Clk,
      
       -- Transaction Record
-      io_tx_trans_rec => tx_trans_rec,
-      io_rx_trans_rec => rx_trans_rec
+      StreamTxRec => StreamTxRec,
+      StreamRxRec => StreamRxRec
     );
 end architecture bhv;

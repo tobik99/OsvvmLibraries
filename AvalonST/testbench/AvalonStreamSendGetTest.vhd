@@ -24,7 +24,7 @@ begin
     wait for 0 ns;
 
     -- Wait for Design Reset
-    wait until i_nreset = '1';
+    wait until Reset = '1';
     ClearAlerts;
 
     -- Wait for test to finish
@@ -40,12 +40,12 @@ begin
   -- Test process
   transmitter_proc : process
   begin
-    wait until i_nreset = '1';
+    wait until Reset = '1';
     wait for 0 ns;
 
-    SendAsync(io_tx_trans_rec, ExpData);
+    SendAsync(StreamTxRec, ExpData);
     --SendAsync(io_tx_trans_rec, ExpData);
-    WaitForClock(io_tx_trans_rec, 2);
+    WaitForClock(StreamTxRec, 2);
     --Send(io_tx_trans_rec, ExpData);
     --Send(io_tx_trans_rec, ExpData);
     WaitForBarrier(TestDone);
@@ -55,14 +55,14 @@ begin
   receiver_proc : process
     variable rx_data : std_logic_vector(31 downto 0);
   begin
-    wait until i_nreset = '1';
-    Get(io_rx_trans_rec, rx_data);
+    wait until Reset = '1';
+    Get(StreamRxRec, rx_data);
     RxData <= rx_data;
     wait for 0 ns;
     AffirmIf(ExpData = RxData, "Data: " & to_string(ExpData),
     " /= Expected: " & to_string(RxData));
 
-    WaitForClock(io_rx_trans_rec, 2);
+    WaitForClock(StreamRxRec, 2);
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;
