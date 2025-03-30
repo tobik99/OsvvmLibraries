@@ -76,17 +76,19 @@ package AvalonStreamComponentPkg is
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
-    signal Clk                      : in std_logic;
-    signal Valid                    : out std_logic;
-    signal Ready                    : in std_logic;
-    signal StartOfNewStream         : in integer;
-    constant TransmitRequestCount   : in integer;
-    constant TransmitDoneCount      : in integer;
-    constant ReadyBeforeValidCycles : in integer;
-    constant tpd_Clk_Valid          : in time;
-    constant AlertLogID             : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage         : in string         := "";
-    constant TimeOutPeriod          : in time           := - 1 sec
+    signal Clk                       : in std_logic;
+    signal Valid                     : out std_logic;
+    signal Ready                     : in std_logic;
+    signal StartOfNewStream          : in integer;
+    constant TransmitRequestCount    : in integer;
+    constant TransmitDoneCount       : in integer;
+    constant ReadyLatency            : in integer;
+    constant ReadyAllowance          : in integer;
+    signal ReadyAllowanceCyclesCount : inout integer;
+    constant tpd_Clk_Valid           : in time;
+    constant AlertLogID              : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage          : in string         := "";
+    constant TimeOutPeriod           : in time           := - 1 sec
   );
 
   ------------------------------------------------------------
@@ -115,20 +117,23 @@ package body AvalonStreamComponentPkg is
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
-    signal Clk                      : in std_logic;
-    signal Valid                    : out std_logic;
-    signal Ready                    : in std_logic;
-    signal StartOfNewStream         : in integer;
-    constant TransmitRequestCount   : in integer;
-    constant TransmitDoneCount      : in integer;
-    constant ReadyBeforeValidCycles : in integer;
-    constant tpd_Clk_Valid          : in time;
-    constant AlertLogID             : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage         : in string         := "";
-    constant TimeOutPeriod          : in time           := - 1 sec
+    signal Clk                       : in std_logic;
+    signal Valid                     : out std_logic;
+    signal Ready                     : in std_logic;
+    signal StartOfNewStream          : in integer;
+    constant TransmitRequestCount    : in integer;
+    constant TransmitDoneCount       : in integer;
+    constant ReadyLatency            : in integer;
+    constant ReadyAllowance          : in integer;
+    signal ReadyAllowanceCyclesCount : inout integer;
+    constant tpd_Clk_Valid           : in time;
+    constant AlertLogID              : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage          : in string         := "";
+    constant TimeOutPeriod           : in time           := - 1 sec
   ) is
   begin
-    if StartOfNewStream = 1 and ReadyBeforeValidCycles > 0 then
+    if StartOfNewStream = 1 and ReadyLatency > 0 then
+      ReadyAllowanceCyclesCount <= ReadyAllowance;
       wait for 0 ns;
       -- Warte auf Ready innerhalb des TimeOuts
       if TimeOutPeriod > 0 sec then
@@ -146,19 +151,29 @@ package body AvalonStreamComponentPkg is
         );
         wait until Clk = '1';
       end if;
-      for i in 1 to ReadyBeforeValidCycles loop -- wait for ready_cycles if configured!
+      for i in 1 to ReadyLatency loop -- wait for ready_cycles if configured!
         wait until Clk = '1';
       end loop;
 
       Valid <= '1' after tpd_Clk_Valid;
 
       -----------------------
-    elsif StartOfNewStream = 1 and ReadyBeforeValidCycles = 0 then
+    elsif StartOfNewStream = 1 and ReadyLatency = 0  and ReadyAllowance = 0 then
+      ReadyAllowanceCyclesCount <= ReadyAllowance;
       Valid <= '1' after tpd_Clk_Valid;
-      
-    else
+    elsif StartOfNewStream = 0 and ReadyAllowance > ReadyLatency then
+      if (Ready = '0' and ReadyAllowanceCyclesCount > 0) then
+        ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
+        Valid                     <= '1' after tpd_Clk_Valid;
+      elsif Ready = '0' and ReadyAllowanceCyclesCount = 0 then
+        Valid <= '0' after tpd_Clk_Valid;
+      else
+        Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
+      end if;
+
+    elsif StartOfNewStream = 0 and ReadyAllowance = ReadyLatency then
       Valid <= '1' after tpd_Clk_Valid;
-  
+
       -- Either ready allowance is set, or we have to stop the transmission immediately (backpressure)
       if (Ready /= '1') then
         -- Warte auf Ready innerhalb des TimeOuts
@@ -238,8 +253,6 @@ package body AvalonStreamComponentPkg is
       FAILURE
       );
     end if;
-
-    
 
   end procedure DoAvalonStreamReadyHandshake;
 

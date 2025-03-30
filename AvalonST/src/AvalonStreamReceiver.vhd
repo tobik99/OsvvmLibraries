@@ -20,17 +20,21 @@ entity AvalonStreamReceiver is
     AVALON_STREAM_READY_ALLOWANCE : integer                 := AVALON_STREAM_READY_LATENCY;
     AVALON_STREAM_DATA_WIDTH      : integer range 1 to 8192 := 32;
     AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
-    tperiod_Clk                : time                    := 10 ns;
+    tperiod_Clk                   : time                    := 10 ns;
     DEFAULT_DELAY                 : time                    := 1 ns;
     tpd_Clk_oReady                : time                    := DEFAULT_DELAY
   );
   port (
-    Clk    : in std_logic;
+    Clk   : in std_logic;
     Reset : in std_logic;
     -- DUT signals
     Valid : in std_logic := '0';
     Data  : in std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     Ready : out std_logic;
+
+    StartOfPacket : out std_logic := '0';
+    EndOfPacket   : out std_logic := '0';
+    Empty         : out std_logic := '0';
 
     -- testbench record
     TransRec : inout StreamRecType
@@ -51,10 +55,11 @@ architecture bhv of AvalonStreamReceiver is
   signal WordRequestCount                      : integer := 0;
   signal WordReceiveCount                      : integer := 0;
   signal ReceiveByteCount, TransferByteCount   : integer := 0;
-  signal StartOfNewStream                        : integer := 1;
-
+  signal StartOfNewStream                      : integer := 1;
   -- Verification Component Configuration
-  signal WaitForGet              : boolean := TRUE;
+  signal WaitForGet     : boolean := TRUE;
+  signal ReadyLatency   : integer := 0;
+  signal ReadyAllowance : integer := 0;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -66,10 +71,10 @@ begin
     ID := NewID(MODEL_INSTANCE_NAME);
     ModelID <= ID;
     --    ProtocolID       <= NewID("Protocol Error", ID ) ;
-    DataCheckID      <= NewID("Data Check", ID ) ;
+    DataCheckID <= NewID("Data Check", ID);
     --BusFailedID <= NewID("No response", ID);
-    
-    ReceiveFifo   <= NewID("ReceiveFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME) ;
+
+    ReceiveFifo <= NewID("ReceiveFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
     wait;
   end process Initialize;
 
@@ -81,7 +86,7 @@ begin
     variable WordCount                       : integer;
     variable TryWordWaiting, TryBurstWaiting : boolean;
     variable FifoWordCount, CheckWordCount   : integer;
-    variable vData, ExpectedData, PopData     : std_logic_vector(Data'range);
+    variable vData, ExpectedData, PopData    : std_logic_vector(Data'range);
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
@@ -94,7 +99,7 @@ begin
 
       case Operation is
         when GET | TRY_GET | CHECK | TRY_CHECK =>
-        
+
           if IsEmpty(ReceiveFifo) and IsTry(Operation) then
             if not TryWordWaiting then
               increment(WordRequestCount);
@@ -118,23 +123,14 @@ begin
               -- Wait for data
               WaitForToggle(WordReceiveCount);
             end if;
-            
+
             (vData) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
             TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
 
             if IsCheck(Operation) then
               ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
-              -- ExpectedParam := UpdateOptions(
-              --   Param     => SafeResize(ModelID, TransRec.ParamToModel, ExpectedParam'length),
-              --   ParamID   => ParamID,
-              --   ParamDest => ParamDest,
-              --   ParamUser => ParamUser,
-              --   ParamLast => ParamLast,
-              --   Count     => WordReceiveCount - LastOffsetCount
-              --   );
               AffirmIf(DataCheckID,
-              --                (Data ?= ExpectedData and Param ?= ExpectedParam) = '1',
               (MetaMatch(vData, ExpectedData)),
               "Operation# " & to_string (DispatcherReceiveCount) & " " &
               " Received.  Data: " & to_hxstring(vData),
@@ -166,6 +162,45 @@ begin
           TransRec.IntFromModel <= WordReceiveCount;
           wait for 0 ns;
 
+        when SET_MODEL_OPTIONS =>
+          case AvalonStreamOptionsType'val(TransRec.Options) is
+            when TRANSACTION_FIFO_SIZE =>
+              -- todo
+            when BEATS_PER_CYCLE =>
+              -- todo
+            when BYTE_ORDER =>
+              -- todo
+            when SYMBOL_WIDTH =>
+              -- todo
+            when READY_ALLOWANCE =>
+              if (TransRec.IntToModel < ReadyLatency) then
+                AlertIf(ModelID, TransRec.IntToModel < ReadyLatency,
+                "ReadyAllowance must be greater than or equal to ReadyLatency - set to ReadyLatency now!", WARNING);
+                ReadyAllowance <= ReadyLatency;
+              else
+                ReadyAllowance <= TransRec.IntToModel;
+              end if;
+            when READY_LATENCY =>
+              ReadyLatency <= TransRec.IntToModel;
+
+            when others =>
+              Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
+          end case;
+        when GET_MODEL_OPTIONS =>
+          case AvalonStreamOptionsType'val(TransRec.Options) is
+            when TRANSACTION_FIFO_SIZE =>
+              -- todo
+            when BEATS_PER_CYCLE =>
+              -- todo
+            when BYTE_ORDER =>
+              -- todo
+            when SYMBOL_WIDTH =>
+              -- todo
+            when READY_ALLOWANCE =>
+              TransRec.IntFromModel <= ReadyAllowance;
+            when READY_LATENCY =>
+              TransRec.IntFromModel <= ReadyLatency;
+          end case;
         when MULTIPLE_DRIVER_DETECT =>
           Alert(ModelID, "Multiple Drivers on Transaction Record. Transaction # " & to_string(TransRec.Rdy), FAILURE);
 
@@ -213,7 +248,7 @@ begin
       );
 
       vData := to_x01(Data);
-      
+
       -- capture this transaction
       push(ReceiveFifo, vData);
 
@@ -227,7 +262,7 @@ begin
 
       if (WordReceiveCount + 1 = WordRequestCount) then
         StartOfNewStream <= 1;
-        Ready <= '0' after tpd_Clk_oReady;
+        Ready            <= '0' after tpd_Clk_oReady;
         --Data <= (others => 'U');
       else
         StartOfNewStream <= 0;
@@ -235,7 +270,7 @@ begin
       -- Signal completion
       increment(WordReceiveCount);
       wait for 0 ns;
-      
+
     end loop ReceiveLoop;
   end process ReceiveHandler;
 end bhv;

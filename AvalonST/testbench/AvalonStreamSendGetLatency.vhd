@@ -41,7 +41,7 @@ begin
   begin
     wait until Reset = '1';
     wait for 0 ns;
-    SetAvalonStreamOptions(StreamTxRec, READY_BEFORE_VALID_DELAY_CYCLES, 3);
+    SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 3);
     WaitForBarrier(SyncPoint);
     for i in 0 to 3 loop
       SendAsync(StreamTxRec, ExpData);
@@ -50,7 +50,7 @@ begin
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
     SendAsync(StreamTxRec, ExpData);
-    SetAvalonStreamOptions(StreamTxRec, READY_BEFORE_VALID_DELAY_CYCLES, 0);
+    SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 0);
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
     wait for 50 ns; -- introduce another delay to see if ready is only asserted when valid

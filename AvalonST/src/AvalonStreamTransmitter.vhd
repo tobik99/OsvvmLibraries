@@ -27,13 +27,14 @@ entity AvalonStreamTransmitter is
     --DEFAULT_CHANNELS   : integer := 1
   );
   port (
-    Clk      : in std_logic;
+    Clk   : in std_logic;
     Reset : in std_logic;
     -- DUT signals
-    Valid       : out std_logic := '0';
-    Data        : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    Valid         : out std_logic := '0';
+    Data          : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     StartOfPacket : out std_logic := '0';
     EndOfPacket   : out std_logic := '0';
+    Empty : out std_logic := '0';
     --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
     Ready : in std_logic;
 
@@ -54,9 +55,11 @@ architecture bhv of AvalonStreamTransmitter is
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
 
+  signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
+
   -- Verification Component Configuration
-  signal ValidDelayCyclesOption            : integer := 0;
-  signal ReadyBeforeValidDelayCyclesOption : integer := 0;
+  signal ReadyLatency   : integer := 0;
+  signal ReadyAllowance : integer := 0;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -80,7 +83,7 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData           : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable NumberTransfers : integer;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
@@ -131,13 +134,26 @@ begin
 
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
-            when TRANSMIT_VALID_DELAY_CYCLES =>
-              ValidDelayCyclesOption <= TransRec.IntToModel;
-            when READY_BEFORE_VALID_DELAY_CYCLES =>
-              ReadyBeforeValidDelayCyclesOption <= TransRec.IntToModel;
-
-              --UseCoverageDelays <= FALSE; -- todo, what is this for?
-
+            when TRANSACTION_FIFO_SIZE =>
+            -- todo
+          when BEATS_PER_CYCLE =>
+            -- todo
+          when BYTE_ORDER =>
+            -- todo
+          when SYMBOL_WIDTH =>
+            -- todo
+            when READY_ALLOWANCE =>
+              if (TransRec.IntToModel < ReadyLatency) then
+                AlertIf(ModelID, TransRec.IntToModel < ReadyLatency,
+                "ReadyAllowance must be greater than or equal to ReadyLatency - set to ReadyLatency now!", WARNING);
+                ReadyAllowance       <= ReadyLatency;
+                ReadyAllowanceCycles <= 0;
+              else
+                ReadyAllowance       <= TransRec.IntToModel;
+                ReadyAllowanceCycles <= TransRec.IntToModel;
+              end if;
+            when READY_LATENCY =>
+              ReadyLatency <= TransRec.IntToModel;
             when others =>
               Alert(ModelID, "SetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
               wait for 0 ns;
@@ -145,10 +161,18 @@ begin
           wait for 0 ns;
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
-            when TRANSMIT_VALID_DELAY_CYCLES =>
-              TransRec.IntFromModel <= ValidDelayCyclesOption;
-            when READY_BEFORE_VALID_DELAY_CYCLES =>
-              TransRec.IntFromModel <= ReadyBeforeValidDelayCyclesOption;
+            when TRANSACTION_FIFO_SIZE =>
+              -- todo
+            when BEATS_PER_CYCLE =>
+              -- todo
+            when BYTE_ORDER =>
+              -- todo
+            when SYMBOL_WIDTH =>
+              -- todo
+            when READY_ALLOWANCE =>
+              TransRec.IntFromModel <= ReadyAllowance;
+            when READY_LATENCY =>
+              TransRec.IntFromModel <= ReadyLatency;
             when others =>
               Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
           end case;
@@ -184,20 +208,19 @@ begin
       DEBUG
       );
       DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
-      ReadyBeforeValidDelayCyclesOption, tpd_Clk_Valid, BusFailedID,
+      ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
       "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk);
-
-
       if (TransmitDoneCount + 1 = TransmitRequestCount) then
-        StartOfNewStream <= 1;
-        Valid <= '0' after tpd_Clk_Valid;
+        StartOfNewStream          <= 1;
+        Valid                     <= '0' after tpd_Clk_Valid;
+        ReadyAllowanceCyclesCount <= ReadyAllowance;
         --Data <= (others => 'U');
       else
         StartOfNewStream <= 0;
       end if;
       Increment(TransmitDoneCount);
       wait for 0 ns;
-    
+
       wait for 0 ns;
 
     end loop;
