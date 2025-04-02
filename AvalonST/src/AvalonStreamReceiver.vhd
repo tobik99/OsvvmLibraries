@@ -88,7 +88,7 @@ begin
     variable FifoWordCount, CheckWordCount   : integer;
     variable vData, ExpectedData, PopData    : std_logic_vector(Data'range);
   begin
-    wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
+    wait for 0 ns;
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
@@ -146,6 +146,10 @@ begin
               );
             end if;
           end if;
+
+        when RECEIVE =>
+          WordRequestCount <= WordRequestCount + TransRec.IntToModel;
+          wait for 0 ns;
         when WAIT_FOR_TRANSACTION =>
           -- Receiver either blocks or does "try" operations
           -- There are no operations in flight
@@ -180,12 +184,15 @@ begin
               else
                 ReadyAllowance <= TransRec.IntToModel;
               end if;
+              Log(ModelID, "Setting AvalonStream Receiver Ready_Allowance to " & to_string(TransRec.IntToModel), DEBUG);
+         
             when READY_LATENCY =>
               ReadyLatency <= TransRec.IntToModel;
 
             when others =>
               Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
           end case;
+          wait for 0 ns;
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when TRANSACTION_FIFO_SIZE =>
@@ -214,7 +221,7 @@ begin
   ReceiveHandler : process
     variable vData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
-    variable ReadyBeforeValid : integer := 0;
+    variable ReadyBeforeValid : integer := 1;
     variable ReadyDelayCycles : integer := 0;
   begin
     -- Initialize
@@ -222,7 +229,7 @@ begin
     wait for 0 ns; -- Allow Cov models to initialize 
     wait for 0 ns; -- Allow Cov models to initialize 
 
-    WaitForBarrier(OsvvmVcInit);
+    --WaitForBarrier(OsvvmVcInit);
     ReceiveLoop : loop
 
       if WaitForGet then
@@ -241,7 +248,8 @@ begin
       Ready            => Ready,
       WordRequestCount => WordRequestCount,
       WordReceiveCount => WordReceiveCount,
-      ReadyBeforeValid => ReadyBeforeValid = 0,
+      ReadyAllowance   => ReadyAllowance,
+      ReadyBeforeValid => ReadyBeforeValid = 1,
       ReadyDelayCycles => ReadyDelayCycles * tperiod_Clk,
       tpd_Clk_Ready    => tpd_Clk_oReady,
       AlertLogID       => ModelID
@@ -265,8 +273,12 @@ begin
         Ready            <= '0' after tpd_Clk_oReady;
         --Data <= (others => 'U');
       else
+        if (ReadyAllowance > 0) and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then -- todo this if might not be necessary
+          Ready <= '0' after tpd_Clk_oReady;
+        end if;
         StartOfNewStream <= 0;
       end if;
+
       -- Signal completion
       increment(WordReceiveCount);
       wait for 0 ns;

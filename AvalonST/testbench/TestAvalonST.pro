@@ -47,6 +47,7 @@ analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamReceiver.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestCtrl.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetTest.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetLatency.vhd
+analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamReadyLatencyAllowance.vhd
 analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestHarness.vhd
 
 SetSaveWaves true

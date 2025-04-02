@@ -83,7 +83,7 @@ begin
 
   -- DUT
   -- test
-  TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(SendGetLatency)
+  TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(ReadyLatencyAllowance)
     port map(
       -- Globals
       Reset => Reset,
