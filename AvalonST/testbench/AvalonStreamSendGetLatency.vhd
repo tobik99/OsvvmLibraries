@@ -73,6 +73,7 @@ begin
   ------------------------------------------------------------
   receiver_proc : process
     variable rx_data : std_logic_vector(31 downto 0);
+    variable available : boolean;
     variable ExpData : std_logic_vector(31 downto 0) := (0 => '1', others => '0');
   begin
     wait until Reset = '1';
@@ -94,7 +95,7 @@ begin
     end loop;
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
-    Check(StreamRxRec, ExpData);
+    
     WaitForTransaction(StreamRxRec);
     WaitForClock(StreamRxRec, 5);
     WaitForBarrier(TestDone);

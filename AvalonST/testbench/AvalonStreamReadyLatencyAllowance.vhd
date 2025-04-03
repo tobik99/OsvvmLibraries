@@ -24,8 +24,8 @@ begin
     wait until Reset = '1';
     ClearAlerts;
 
-    WaitForBarrier(TestDone, 2000 ns);
-    AlertIf(now >= 2000 ns, "Test finished due to timeout");
+    WaitForBarrier(TestDone, 1000 ns);
+    AlertIf(now >= 1000 ns, "Test finished due to timeout");
     AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
 
     EndOfTestReports;
@@ -49,16 +49,36 @@ begin
     "1001", -- 9
     "1010"  -- 10
 );
+variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
+    "0001", -- 1
+    "0010", -- 2
+    "0011", -- 3
+    "0100", -- 4
+    "0101", -- 5
+    "0110", -- 6
+    "0111", -- 7
+    "1000", -- 8
+    "1001", -- 9
+    "1010"  -- 10
+);
   begin
     wait until Reset = '1';
     wait for 0 ns;
     SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 2);
     SetAvalonStreamOptions(StreamTxRec, READY_ALLOWANCE, 3);
     wait for 10 ns;
-    WaitForBarrier(SyncPoint);
+    --WaitForBarrier(SyncPoint);
     SendAsync(StreamTxRec, ExpData);
-    WaitForBarrier(SyncPoint);
+    --WaitForBarrier(SyncPoint);
     WaitForTransaction(StreamTxRec);
+
+    SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 3);
+    SetAvalonStreamOptions(StreamTxRec, READY_ALLOWANCE, 5);
+    wait for 10 ns;
+    --WaitForBarrier(SyncPoint);
+    SendAsync(StreamTxRec, ExpData2);
+    WaitForTransaction(StreamTxRec);
+    wait for 20 ns; -- to see more in the waveform
     WaitForBarrier(TestDone);
     wait;
   end process transmitter_proc;
@@ -80,20 +100,37 @@ begin
       "1001", -- 9
       "1010"  -- 10
   );
+  variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
+    "0001", -- 1
+    "0010", -- 2
+    "0011", -- 3
+    "0100", -- 4
+    "0101", -- 5
+    "0110", -- 6
+    "0111", -- 7
+    "1000", -- 8
+    "1001", -- 9
+    "1010"  -- 10
+);
   begin
     wait until Reset = '1';
     wait for 0 ns;
     --SetAvalonStreamOptions(StreamRxRec, READY_LATENCY, 3);
     SetAvalonStreamOptions(StreamRxRec, READY_ALLOWANCE, 3);
     wait for 10 ns;
-    WaitForBarrier(SyncPoint);
-   
-
-
+    --WaitForBarrier(SyncPoint);
 
     Receive(StreamRxRec, 10);
     WaitForTransaction(StreamRxRec);
-    WaitForClock(StreamRxRec, 5);
+    Check(StreamRxRec, ExpData);
+    SetAvalonStreamOptions(StreamRxRec, READY_ALLOWANCE, 5);
+    wait for 10 ns;
+    --WaitForBarrier(SyncPoint);
+    wait for 20 ns;
+    Receive(StreamRxRec, 10);
+    WaitForTransaction(StreamRxRec);
+    Check(StreamRxRec, ExpData2);
+    WaitForTransaction(StreamRxRec);
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

@@ -106,18 +106,6 @@ begin
             wait until TransmitRequestCount = TransmitDoneCount;
             log("async wait completed");
           end if;
-        when SEND_BURST | SEND_BURST_ASYNC =>
-          NumberTransfers := TransRec.IntToModel;
-          TransmitRequestCount <= TransmitRequestCount + NumberTransfers;
-
-          for i in NumberTransfers - 1 downto 0 loop
-            vData := Pop(TransRec.BurstFifo);
-            Push(TransmitFifo, vData); --'1' for signalling its more than one transfer (burst)
-          end loop;
-          wait for 0 ns;
-          if IsBlocking(TransRec.Operation) then
-            wait until TransmitRequestCount = TransmitDoneCount;
-          end if;
         when WAIT_FOR_TRANSACTION =>
           if TransmitRequestCount /= TransmitDoneCount then
             wait until TransmitRequestCount = TransmitDoneCount;
@@ -147,7 +135,7 @@ begin
                 AlertIf(ModelID, TransRec.IntToModel < ReadyLatency,
                 "ReadyAllowance must be greater than or equal to ReadyLatency - set to ReadyLatency now!", WARNING);
                 ReadyAllowance       <= ReadyLatency;
-                ReadyAllowanceCycles <= 0;
+                ReadyAllowanceCycles <= ReadyLatency;
               else
                 ReadyAllowance       <= TransRec.IntToModel;
                 ReadyAllowanceCycles <= TransRec.IntToModel;
@@ -210,9 +198,10 @@ begin
       DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
       ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
       "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk);
-      if (TransmitDoneCount + 1 = TransmitRequestCount) then
+      if (TransmitDoneCount + 1 >= TransmitRequestCount) then
         StartOfNewStream          <= 1;
         Valid                     <= '0' after tpd_Clk_Valid;
+        Data  <= (vData'range => 'X');
         ReadyAllowanceCyclesCount <= ReadyAllowance;
         --Data <= (others => 'U');
       else

@@ -133,8 +133,8 @@ package body AvalonStreamComponentPkg is
     constant TimeOutPeriod           : in time           := - 1 sec
   ) is
   begin
-    if(Ready = '1') then -- do normal send
-      Valid                     <= '1' after tpd_Clk_Valid;
+    if (Ready = '1') then -- do normal send
+      Valid <= '1' after tpd_Clk_Valid;
     else
       if StartOfNewStream = 1 and ReadyLatency > 0 then
         ReadyAllowanceCyclesCount <= ReadyAllowance;
@@ -145,7 +145,7 @@ package body AvalonStreamComponentPkg is
         else
           wait on Clk until Clk = '1' and Ready = '1';
         end if;
-  
+
         -- Falls Ready nicht gesetzt wurde, Fehler melden
         if Ready /= '1' then
           Alert(
@@ -158,9 +158,9 @@ package body AvalonStreamComponentPkg is
         for i in 1 to ReadyLatency loop -- wait for ready_cycles if configured!
           wait until Clk = '1';
         end loop;
-  
+
         Valid <= '1' after tpd_Clk_Valid;
-  
+
         -----------------------
       elsif StartOfNewStream = 1 and ReadyLatency = 0 and ReadyAllowance = 0 then
         ReadyAllowanceCyclesCount <= ReadyAllowance;
@@ -174,10 +174,10 @@ package body AvalonStreamComponentPkg is
         else
           Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
         end if;
-  
+
       elsif StartOfNewStream = 0 and ReadyAllowance = ReadyLatency then
         Valid <= '1' after tpd_Clk_Valid;
-  
+
         -- Either ready allowance is set, or we have to stop the transmission immediately (backpressure)
         if (Ready /= '1') then
           -- Warte auf Ready innerhalb des TimeOuts
@@ -199,7 +199,7 @@ package body AvalonStreamComponentPkg is
         end if;
       end if;
     end if;
-    
+
     wait on Clk until Clk = '1';
   end procedure DoAvalonStreamValidHandshake;
 
@@ -227,14 +227,13 @@ package body AvalonStreamComponentPkg is
     else
       Ready <= transport '0' after ReadyDelayCycles + tpd_Clk_Ready;
       Log(AlertLogID, "Setting Ready to 0");
-
     end if;
-    -- Wait to Receive Transaction
     if (ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
       Ready <= '0' after tpd_Clk_Ready;
       Log(AlertLogID, "Setting Ready to 0 due to ReadyAllowance");
-
     end if;
+
+    -- Wait to Receive Transaction
     if TimeOutPeriod > 0 sec then
       wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
     else
@@ -243,8 +242,8 @@ package body AvalonStreamComponentPkg is
 
     if Valid = '1' then
       if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then -- skips the check
-        wait on Clk until Clk = '1' and Valid = '1';
         Log(AlertLogID, "waiting for the last words");
+        AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
       else
         if not ReadyBeforeValid then
           Ready <= '1' after ReadyDelayCycles + tpd_Clk_Ready;

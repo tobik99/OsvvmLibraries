@@ -98,7 +98,7 @@ begin
       );
 
       case Operation is
-        when GET | TRY_GET | CHECK | TRY_CHECK =>
+        when GET | TRY_GET =>
 
           if IsEmpty(ReceiveFifo) and IsTry(Operation) then
             if not TryWordWaiting then
@@ -146,17 +146,31 @@ begin
               );
             end if;
           end if;
+        when CHECK | TRY_CHECK =>
+          if IsEmpty(ReceiveFifo) then
+            Alert(ModelID, "Can not check any data due to the Receive FIFO being empty!", FAILURE);
+          end if;
+          (vData) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
+          TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
+
+          if IsCheck(Operation) then
+            ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
+            AffirmIf(DataCheckID,
+            (MetaMatch(vData, ExpectedData)),
+            "Operation# " & to_string (DispatcherReceiveCount) & " " &
+            " Received.  Data: " & to_hxstring(vData),
+            " Expected.  Data: " & to_hxstring(ExpectedData),
+            TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
+            );
+          end if;
         when RECEIVE =>
           WordRequestCount <= WordRequestCount + TransRec.IntToModel;
           wait for 0 ns;
         when WAIT_FOR_TRANSACTION =>
-          -- Receiver either blocks or does "try" operations
-          -- There are no operations in flight
-          -- There can be values received but not Get yet.
-          -- Cannot block on those.
-          wait for 0 ns;
-
+          if (WordReceiveCount /= WordRequestCount) then
+            wait until WordReceiveCount = WordRequestCount;
+          end if;
         when WAIT_FOR_CLOCK =>
           WaitForClock(Clk, TransRec.IntToModel);
 
@@ -185,7 +199,7 @@ begin
                 ReadyAllowance <= TransRec.IntToModel;
               end if;
               Log(ModelID, "Setting AvalonStream Receiver Ready_Allowance to " & to_string(TransRec.IntToModel), DEBUG);
-         
+
             when READY_LATENCY =>
               ReadyLatency <= TransRec.IntToModel;
 
