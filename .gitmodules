@@ -3,7 +3,7 @@
     url = https://github.com/OSVVM/OSVVM.git
 [submodule "Common"]
     path = Common
-    url = https://github.com/OSVVM/OSVVM-Common.git
+    url = https://github.com/tobik99/OSVVM-Common.git
 [submodule "Scripts"]
     path = Scripts
     url = https://github.com/OSVVM/OSVVM-Scripts.git
