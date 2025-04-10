@@ -34,21 +34,20 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #  
-#build /home/tobi/repos/OsvvmLibraries
+#build ../../OsvvmLibraries
 
 library osvvm_avalonst
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamOptionsPkg.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamComponentPkg.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamContext.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamTransmitter.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/src/AvalonStreamReceiver.vhd
+analyze ../src/AvalonStreamOptionsPkg.vhd
+analyze ../src/AvalonStreamComponentPkg.vhd
+analyze ../src/AvalonStreamContext.vhd
+analyze ../src/AvalonStreamTransmitter.vhd
+analyze ../src/AvalonStreamReceiver.vhd
 
-
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestCtrl.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetTest.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamSendGetLatency.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamReadyLatencyAllowance.vhd
-analyze /home/tobi/repos/OsvvmLibraries/AvalonST/testbench/AvalonStreamTestHarness.vhd
+analyze ../testbench/AvalonStreamTestCtrl.vhd
+analyze ../testbench/AvalonStreamSendGetTest.vhd
+analyze ../testbench/AvalonStreamSendGetLatency.vhd
+analyze ../testbench/AvalonStreamReadyLatencyAllowance.vhd
+analyze ../testbench/AvalonStreamTestHarness.vhd
 
 SetSaveWaves true
 simulate AvalonStreamTestHarness
