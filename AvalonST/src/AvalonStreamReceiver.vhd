@@ -60,6 +60,8 @@ architecture bhv of AvalonStreamReceiver is
   signal WaitForGet     : boolean := TRUE;
   signal ReadyLatency   : integer := 0;
   signal ReadyAllowance : integer := 0;
+  signal ByteOrder                                       : boolean := false; -- big endian is default
+    signal SymbolWidth                                     : natural := 8;     -- default is 8 bits
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -87,6 +89,7 @@ begin
     variable TryWordWaiting, TryBurstWaiting : boolean;
     variable FifoWordCount, CheckWordCount   : integer;
     variable vData, ExpectedData, PopData    : std_logic_vector(Data'range);
+    variable vSymbolWidth : integer := 0;
   begin
     wait for 0 ns;
 
@@ -213,10 +216,24 @@ begin
               -- todo
             when BEATS_PER_CYCLE =>
               -- todo
-            when BYTE_ORDER =>
-              -- todo
-            when SYMBOL_WIDTH =>
-              -- todo
+              when BYTE_ORDER =>
+              ByteOrder <= TransRec.BoolToModel;
+              wait for 0 ns;
+              if (ByteOrder = true) then
+                Log(ModelID, "Byte Order set to Little Endian", INFO, TRUE);
+              else
+                Log(ModelID, "Byte Order set to Big Endian", INFO, TRUE);
+              end if;
+              when SYMBOL_WIDTH =>
+              vSymbolWidth := TransRec.IntToModel;
+              if ((vSymbolWidth > 0) and (vSymbolWidth <= AVALON_STREAM_DATA_WIDTH) and
+                (unsigned(to_unsigned(vSymbolWidth, AVALON_STREAM_DATA_WIDTH)) and
+                unsigned(to_unsigned(vSymbolWidth - 1, AVALON_STREAM_DATA_WIDTH))) = 0) then
+                SymbolWidth <= vSymbolWidth;
+                Log(ModelID, "SymbolWidth set to " & to_string(vSymbolWidth), INFO, TRUE);
+              else
+                Alert(ModelID, "SymbolWidth must be a power of 2 and less than or equal to AVALON_STREAM_DATA_WIDTH", FAILURE);
+              end if;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;
             when READY_LATENCY =>
@@ -234,7 +251,7 @@ begin
 
   ReceiveHandler : process
     variable vData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-
+    variable vSymbolCount : integer := 0;
     variable ReadyBeforeValid : integer := 1;
     variable ReadyDelayCycles : integer := 0;
   begin
@@ -270,7 +287,13 @@ begin
       );
 
       vData := to_x01(Data);
-
+      if (ByteOrder = true) then
+        vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
+        for i in 0 to vSymbolCount - 1 loop
+          vData((i + 1) * SymbolWidth - 1 downto i * SymbolWidth) :=
+          vData((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth);
+        end loop;
+      end if;
       -- capture this transaction
       push(ReceiveFifo, vData);
 

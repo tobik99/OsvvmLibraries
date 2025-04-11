@@ -43,6 +43,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 
+
 library osvvm;
 context osvvm.OsvvmContext;
 
@@ -106,6 +107,13 @@ package AvalonStreamComponentPkg is
     constant AlertLogID       : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage   : in string         := "";
     constant TimeOutPeriod    : in time           := - 1 sec
+  );
+
+  procedure reverse_endian (
+    constant symbol_width : integer; -- z.?B. 8, 16, 4
+    constant word_width   : integer; -- z.?B. 32, 64
+    variable data_in        : in std_logic_vector(word_width - 1 downto 0);
+    variable data_out       : out std_logic_vector(word_width - 1 downto 0)
   );
 
 end package AvalonStreamComponentPkg;
@@ -267,5 +275,17 @@ package body AvalonStreamComponentPkg is
     end if;
     -- end if;
   end procedure DoAvalonStreamReadyHandshake;
-
+  procedure reverse_endian (
+    constant symbol_width : integer; -- z.?B. 8, 16, 4
+    constant word_width   : integer; -- z.?B. 32, 64
+    variable data_in        : in std_logic_vector(word_width - 1 downto 0);
+    variable data_out       : out std_logic_vector(word_width - 1 downto 0)
+  ) is
+    constant symbol_count : integer := word_width / symbol_width;
+  begin
+    for i in 0 to symbol_count - 1 loop
+      data_out((i + 1) * symbol_width - 1 downto i * symbol_width) :=
+      data_in((symbol_count - i) * symbol_width - 1 downto (symbol_count - i - 1) * symbol_width);
+    end loop;
+  end procedure;
 end package body AvalonStreamComponentPkg;

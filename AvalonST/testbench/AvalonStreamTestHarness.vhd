@@ -50,7 +50,6 @@ begin
     generic map(
       MODEL_ID_NAME      => "AvalonStreamTransmitter",
       AVALON_STREAM_DATA_WIDTH => 32,
-      AVALON_STREAM_READY_LATENCY => 0,
       DEFAULT_DELAY      => 1 ns,
       tpd_Clk_Valid      => 1 ns,
       tpd_Clk_oData      => 1 ns

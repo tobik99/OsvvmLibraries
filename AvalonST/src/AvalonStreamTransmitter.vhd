@@ -2,7 +2,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use ieee.numeric_std_unsigned.all;
-
 library osvvm;
 context osvvm.OsvvmContext;
 
@@ -10,16 +9,11 @@ use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
-
 entity AvalonStreamTransmitter is
   generic (
-    MODEL_ID_NAME : string := "";
-    -- AVALON_STREAM_CHANNELS        : integer range 1 to 128  := 1;
-    --AVALON_STREAM_ERROR           : integer range 1 to 256  := 1;
-    AVALON_STREAM_READY_LATENCY   : integer                 := 1; -- default behavior
-    AVALON_STREAM_READY_ALLOWANCE : integer                 := AVALON_STREAM_READY_LATENCY;
-    AVALON_STREAM_DATA_WIDTH      : integer range 1 to 8192 := 32;
-    -- AVALON_STREAM_BIG_ENDIAN      : boolean                 := false; -- little endian is default
+    MODEL_ID_NAME            : string                  := "";
+    AVALON_STREAM_DATA_WIDTH : integer range 1 to 8192 := 32;
+
     DEFAULT_DELAY : time := 1 ns;
     tpd_Clk_Valid : time := DEFAULT_DELAY;
     tperiod_Clk   : time := 10 ns;
@@ -34,7 +28,7 @@ entity AvalonStreamTransmitter is
     Data          : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     StartOfPacket : out std_logic := '0';
     EndOfPacket   : out std_logic := '0';
-    Empty : out std_logic := '0';
+    Empty         : out std_logic := '0';
     --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
     Ready : in std_logic;
 
@@ -55,11 +49,12 @@ architecture bhv of AvalonStreamTransmitter is
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
 
-  signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
-
   -- Verification Component Configuration
-  signal ReadyLatency   : integer := 0;
-  signal ReadyAllowance : integer := 0;
+  signal ReadyLatency                                    : integer := 0;
+  signal ReadyAllowance                                  : integer := 0;
+  signal ByteOrder                                       : boolean := false; -- big endian is default
+  signal SymbolWidth                                     : natural := 8;     -- default is 8 bits
+  signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -74,17 +69,15 @@ begin
     --    DataCheckID      <= NewID("Data Check", ID ) ;
     --BusFailedID  <= NewID("No response", ID);
     TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
-    if (AVALON_STREAM_READY_ALLOWANCE < AVALON_STREAM_READY_LATENCY) then
-      Alert(ModelID, "Ready Allowance must be at least Ready Latency or greater", FAILURE);
-    end if;
     wait;
   end process Initialize;
 
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData           : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    variable NumberTransfers : integer;
+    variable vData                      : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vSymbolWidth, vSymbolCount : integer := 0;
+    variable NumberTransfers            : integer;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
 
@@ -98,6 +91,13 @@ begin
       case TransRec.Operation is
         when SEND | SEND_ASYNC =>
           vData := SafeResize(ModelID, TransRec.DataToModel, vData'length);
+          if (ByteOrder = true) then
+            vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
+            for i in 0 to vSymbolCount - 1 loop
+              vData((i + 1) * SymbolWidth - 1 downto i * SymbolWidth) :=
+              vData((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth);
+            end loop;
+          end if;
           Push(TransmitFifo, vData);
           Increment(TransmitRequestCount);
           wait for 0 ns;
@@ -123,13 +123,28 @@ begin
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when TRANSACTION_FIFO_SIZE =>
-            -- todo
-          when BEATS_PER_CYCLE =>
-            -- todo
-          when BYTE_ORDER =>
-            -- todo
-          when SYMBOL_WIDTH =>
-            -- todo
+              -- todo
+            when BEATS_PER_CYCLE =>
+              -- todo
+            when BYTE_ORDER =>
+              ByteOrder <= TransRec.BoolToModel;
+              wait for 0 ns;
+              if (ByteOrder = true) then
+                Log(ModelID, "Byte Order set to Little Endian", INFO, TRUE);
+              else
+                Log(ModelID, "Byte Order set to Big Endian", INFO, TRUE);
+              end if;
+
+            when SYMBOL_WIDTH =>
+              vSymbolWidth := TransRec.IntToModel;
+              if ((vSymbolWidth > 0) and (vSymbolWidth <= AVALON_STREAM_DATA_WIDTH) and
+                (unsigned(to_unsigned(vSymbolWidth, AVALON_STREAM_DATA_WIDTH)) and
+                unsigned(to_unsigned(vSymbolWidth - 1, AVALON_STREAM_DATA_WIDTH))) = 0) then
+                SymbolWidth <= vSymbolWidth;
+                Log(ModelID, "SymbolWidth set to " & to_string(vSymbolWidth), INFO, TRUE);
+              else
+                Alert(ModelID, "SymbolWidth must be a power of 2 and less than or equal to AVALON_STREAM_DATA_WIDTH", FAILURE);
+              end if;
             when READY_ALLOWANCE =>
               if (TransRec.IntToModel < ReadyLatency) then
                 AlertIf(ModelID, TransRec.IntToModel < ReadyLatency,
@@ -154,7 +169,7 @@ begin
             when BEATS_PER_CYCLE =>
               -- todo
             when BYTE_ORDER =>
-              -- todo
+              TransRec.BoolFromModel <= ByteOrder;
             when SYMBOL_WIDTH =>
               -- todo
             when READY_ALLOWANCE =>
@@ -197,11 +212,11 @@ begin
       );
       DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
       ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
-      "Valid Handshake timeout", AVALON_STREAM_READY_LATENCY * tperiod_Clk);
+      "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
       if (TransmitDoneCount + 1 >= TransmitRequestCount) then
         StartOfNewStream          <= 1;
         Valid                     <= '0' after tpd_Clk_Valid;
-        Data  <= (vData'range => 'X');
+        Data                      <= (vData'range => 'X');
         ReadyAllowanceCyclesCount <= ReadyAllowance;
         --Data <= (others => 'U');
       else

@@ -34,7 +34,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #  
-#build ../../OsvvmLibraries
+#include ../../OsvvmLibraries.pro
 
 library osvvm_avalonst
 analyze ../src/AvalonStreamOptionsPkg.vhd
