@@ -75,7 +75,7 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData                      : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData, vDataReverse                      : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable vSymbolWidth, vSymbolCount : integer := 0;
     variable NumberTransfers            : integer;
   begin
@@ -94,11 +94,14 @@ begin
           if (ByteOrder = true) then
             vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
             for i in 0 to vSymbolCount - 1 loop
-              vData((i + 1) * SymbolWidth - 1 downto i * SymbolWidth) :=
+              vDataReverse((i + 1) * SymbolWidth - 1 downto i * SymbolWidth) :=
               vData((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth);
             end loop;
+              Push(TransmitFifo, vDataReverse);
+            else 
+              Push(TransmitFifo, vData);
           end if;
-          Push(TransmitFifo, vData);
+          
           Increment(TransmitRequestCount);
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
@@ -171,7 +174,7 @@ begin
             when BYTE_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
             when SYMBOL_WIDTH =>
-              -- todo
+              TransRec.IntFromModel <= SymbolWidth;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;
             when READY_LATENCY =>

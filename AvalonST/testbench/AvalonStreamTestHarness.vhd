@@ -82,7 +82,7 @@ begin
 
   -- DUT
   -- test
-  TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(ReadyLatencyAllowance)
+  TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(ByteOrderSymbolWidth)
     port map(
       -- Globals
       Reset => Reset,

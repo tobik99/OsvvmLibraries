@@ -47,6 +47,7 @@ analyze ../testbench/AvalonStreamTestCtrl.vhd
 analyze ../testbench/AvalonStreamSendGetTest.vhd
 analyze ../testbench/AvalonStreamSendGetLatency.vhd
 analyze ../testbench/AvalonStreamReadyLatencyAllowance.vhd
+analyze ../testbench/AvalonStreamByteOrderSymbolWidth.vhd
 analyze ../testbench/AvalonStreamTestHarness.vhd
 
 SetSaveWaves true
