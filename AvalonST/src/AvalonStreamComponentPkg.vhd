@@ -114,6 +114,8 @@ package AvalonStreamComponentPkg is
     signal Ready            : inout std_logic;
     signal StartOfPacket    : in std_logic;
     signal EndOfPacket      : in std_logic;
+    
+    signal PacketReceivedCount : inout integer;
     signal Data             : in std_logic_vector;
     signal TransRec             : inout StreamRecType;
     signal WordsInPacket : inout integer;
@@ -290,6 +292,7 @@ package body AvalonStreamComponentPkg is
     signal Ready            : inout std_logic;
     signal StartOfPacket    : in std_logic;
     signal EndOfPacket      : in std_logic;
+    signal PacketReceivedCount : inout integer;
     signal Data             : in std_logic_vector;
     signal TransRec             : inout StreamRecType;
     signal WordsInPacket : inout integer;
@@ -314,10 +317,11 @@ package body AvalonStreamComponentPkg is
       else
         wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
       end if;
-
+      LOG(AlertLogID,"start of packet", INFO, TRUE);
       exit when Valid = '1' and StartOfPacket = '1';
     end loop;
     loop
+      LOG(AlertLogID,"now in packet", INFO, TRUE);
       -- Immer direkt Ready setzen
       Ready <= '1' after tpd_Clk_Ready;
 
@@ -352,5 +356,7 @@ package body AvalonStreamComponentPkg is
       end if;
     end loop;
     Ready <= '0' after tpd_Clk_Ready;
+    PacketReceivedCount <= PacketReceivedCount + 1;
+    LOG(AlertLogID,"packet received", INFO, TRUE);
   end procedure;
 end package body AvalonStreamComponentPkg;

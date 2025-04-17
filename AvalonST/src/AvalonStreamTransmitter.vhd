@@ -41,6 +41,7 @@ entity AvalonStreamTransmitter is
   ifelse(MODEL_ID_NAME'length > 0, MODEL_ID_NAME,
   to_lower(PathTail(AvalonStreamTransmitter'PATH_NAME)));
 
+  alias PacketFifo : ScoreboardIdType is TransRec.BurstFifo;
 end AvalonStreamTransmitter;
 
 architecture bhv of AvalonStreamTransmitter is
@@ -49,7 +50,7 @@ architecture bhv of AvalonStreamTransmitter is
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
   signal PacketRequestCount, PacketTransmitCount : integer := 0;
-  signal PacketWordLength                      : integer := 0;
+  signal PacketWordLength                        : integer := 0;
   -- Verification Component Configuration
   signal ReadyLatency                                    : integer := 0;
   signal ReadyAllowance                                  : integer := 0;
@@ -82,7 +83,7 @@ begin
     variable NumberTransfers            : integer;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
-
+    TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME) ;
     TransactionDispatcherLoop : loop
       WaitForTransaction(
       Clk => Clk,
@@ -118,6 +119,7 @@ begin
 
         when SEND_PACKET =>
           PacketWordLength <= TransRec.IntToModel;
+          PacketRequestCount <= PacketRequestCount + 1;
           wait for 0 ns;
           -- todo, check if packet transport is enabled
 
@@ -138,12 +140,13 @@ begin
               -- todo
             when PACKET_TRANSFER =>
               PacketTransfer <= TransRec.BoolToModel;
+              wait for 0 ns;
               if (PacketTransfer = true) then
                 Log(ModelID, "Packet Transfer set to true", INFO, TRUE);
               else
                 Log(ModelID, "Packet Transfer set to false", INFO, TRUE);
               end if;
-              wait for 0 ns;
+              
             when BYTE_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -207,44 +210,98 @@ begin
   end process TransactionDispatcher;
 
   TransmitHandler : process is
-    variable vData  : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
   begin
     -- initialize outputs
     Valid <= '0';
     Data  <= (vData'range => 'X');
+    StartOfPacket <= '0';
+    EndOfPacket   <= '0';
+    Empty         <= '0';
     wait for 0 ns;
 
     TransmitLoop : loop
-      -- Find Transaction
-      if IsEmpty(TransmitFifo) and not PacketTransfer then
-        WaitForToggle(TransmitRequestCount);
+      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransmitFifo) then
+        wait on TransmitRequestCount, PacketRequestCount;
       end if;
-      -- Get Transaction
-      (vData) := Pop(TransmitFifo);
-      Data <= vData;
-      Log(ModelID,
-      "AvalonStream Transmit." &
-      "  Data: " & to_hxstring(vData) &
-      "  Operation# " & to_string (TransmitDoneCount + 1),
-      DEBUG
-      );
-      DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
-      ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
-      "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
-      if (TransmitDoneCount + 1 >= TransmitRequestCount) then
-        StartOfNewStream          <= 1;
-        Valid                     <= '0' after tpd_Clk_Valid;
-        Data                      <= (vData'range => 'X');
-        ReadyAllowanceCyclesCount <= ReadyAllowance;
+      if PacketTransfer and (PacketRequestCount > PacketTransmitCount) then
+
+        StartOfPacket <= '1';
+        EndOfPacket   <= '0';
+        wait for 0 ns;
+
+        while not IsEmpty(PacketFifo) loop
+          vData := Pop(PacketFifo);
+          Data <= vData;
+
+          -- Prüfen ob es das letzte Wort im Paket ist (FIFO ist danach leer)
+          EndOfPacket <= '1' when IsEmpty(PacketFifo) else
+            '0';
+
+          Log(ModelID,
+          "AvalonStream Packet Transmit." &
+          "  Data: " & to_hxstring(vData) &
+          "  SOP: " & to_string(StartOfPacket) &
+          "  EOP: " & to_string(EndOfPacket) &
+          "  Packet# " & to_string(PacketTransmitCount + 1),
+          DEBUG
+          );
+
+          DoAvalonStreamValidHandshake(
+          Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
+          0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
+          "Packet Valid Handshake Timeout", tperiod_Clk * 100
+          );
+
+          -- Nach erstem Wort SOP zurücksetzen
+          StartOfPacket <= '0';
+
+          -- Bei EOP fertig
+          if EndOfPacket = '1' then
+            EndOfPacket <= '0';
+            exit;
+          end if;
+
+          wait for 0 ns;
+        end loop;
+
+        Increment(PacketTransmitCount);
+        StartOfNewStream <= 1;
+        Valid            <= '0' after tpd_Clk_Valid;
+        Data             <= (vData'range => 'X');
+        wait for 0 ns;
       else
-        StartOfNewStream <= 0;
+
+        -- Find Transaction
+        if IsEmpty(TransmitFifo) and not PacketTransfer then
+          WaitForToggle(TransmitRequestCount);
+        end if;
+        -- Get Transaction
+        (vData) := Pop(TransmitFifo);
+        Data <= vData;
+        Log(ModelID,
+        "AvalonStream Transmit." &
+        "  Data: " & to_hxstring(vData) &
+        "  Operation# " & to_string (TransmitDoneCount + 1),
+        DEBUG
+        );
+        DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
+        ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
+        "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
+        if (TransmitDoneCount + 1 >= TransmitRequestCount) then
+          StartOfNewStream          <= 1;
+          Valid                     <= '0' after tpd_Clk_Valid;
+          Data                      <= (vData'range => 'X');
+          ReadyAllowanceCyclesCount <= ReadyAllowance;
+        else
+          StartOfNewStream <= 0;
+        end if;
+        Increment(TransmitDoneCount);
+        wait for 0 ns;
+
+        wait for 0 ns;
       end if;
-      Increment(TransmitDoneCount);
-      wait for 0 ns;
-
-      wait for 0 ns;
-
     end loop;
   end process TransmitHandler;
 

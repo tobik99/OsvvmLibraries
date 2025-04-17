@@ -34,7 +34,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #  
-include ../../OsvvmLibraries.pro
+#include ../../OsvvmLibraries.pro
 
 library osvvm_avalonst
 analyze ../src/AvalonStreamOptionsPkg.vhd
@@ -44,6 +44,7 @@ analyze ../src/AvalonStreamTransmitter.vhd
 analyze ../src/AvalonStreamReceiver.vhd
 
 analyze ../testbench/AvalonStreamTestCtrl.vhd
+analyze ../testbench/AvalonStreamPacketTransport.vhd
 analyze ../testbench/AvalonStreamSendGetTest.vhd
 analyze ../testbench/AvalonStreamSendGetLatency.vhd
 analyze ../testbench/AvalonStreamReadyLatencyAllowance.vhd

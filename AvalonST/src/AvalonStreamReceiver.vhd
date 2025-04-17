@@ -32,9 +32,9 @@ entity AvalonStreamReceiver is
     Data  : in std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     Ready : out std_logic;
 
-    StartOfPacket : out std_logic := '0';
-    EndOfPacket   : out std_logic := '0';
-    Empty         : out std_logic := '0';
+    StartOfPacket : in std_logic := '0';
+    EndOfPacket   : in std_logic := '0';
+    Empty         : in std_logic := '0';
 
     -- testbench record
     TransRec : inout StreamRecType
@@ -51,10 +51,10 @@ end AvalonStreamReceiver;
 architecture bhv of AvalonStreamReceiver is
   signal ModelID                                : AlertLogIDType;
   signal DataCheckID                            : AlertLogIDType;
-  signal ReceiveFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
+  signal PacketFifo                             : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal WordRequestCount, WordReceiveCount     : integer := 0;
   signal PacketRequestCount, PacketReceiveCount : integer := 0;
-  signal PacketWordLength                          : integer := 0;
+  signal PacketWordLength                       : integer := 0;
   signal StartOfNewStream                       : integer := 1;
   -- Verification Component Configuration
   signal WaitForGet     : boolean := true;
@@ -78,7 +78,7 @@ begin
     DataCheckID <= NewID("Data Check", ID);
     --BusFailedID <= NewID("No response", ID);
 
-    ReceiveFifo <= NewID("ReceiveFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
+    PacketFifo <= NewID("PacketFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
     wait;
   end process Initialize;
 
@@ -89,12 +89,12 @@ begin
     variable DispatcherReceiveCount          : integer := 0;
     variable WordCount                       : integer;
     variable TryWordWaiting, TryBurstWaiting : boolean;
-    variable CheckWordCount   : integer;
+    variable CheckWordCount                  : integer;
     variable vData, ExpectedData, PopData    : std_logic_vector(Data'range);
     variable vSymbolWidth                    : integer := 0;
-    variable vPacketData                     : slv_array_t(0 to WordsInPacket - 1)(AVALON_STREAM_DATA_WIDTH - 1 downto 0); -- todo receivePacketCount stimmt hier nicht ganz
   begin
     wait for 0 ns;
+    TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
@@ -105,7 +105,7 @@ begin
 
       case Operation is
         when GET | TRY_GET =>
-          if IsEmpty(ReceiveFifo) and IsTry(Operation) then
+          if IsEmpty(PacketFifo) and IsTry(Operation) then
             if not TryWordWaiting then
               increment(WordRequestCount);
             end if;
@@ -124,12 +124,12 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-            if IsEmpty(ReceiveFifo) then
+            if IsEmpty(PacketFifo) then
               -- Wait for data
               WaitForToggle(WordReceiveCount);
             end if;
 
-            (vData) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+            (vData) := pop(PacketFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
             TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
 
@@ -152,10 +152,10 @@ begin
             end if;
           end if;
         when CHECK | TRY_CHECK =>
-          if IsEmpty(ReceiveFifo) then
+          if IsEmpty(PacketFifo) then
             Alert(ModelID, "Can not check any data due to the Receive FIFO being empty!", FAILURE);
           end if;
-          (vData) := pop(ReceiveFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+          (vData) := pop(PacketFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
           TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
 
@@ -173,10 +173,10 @@ begin
           WordRequestCount <= WordRequestCount + TransRec.IntToModel;
           wait for 0 ns;
         when RECEIVE_PACKET =>
-          PacketRequestCount <= PacketRequestCount + TransRec.IntToModel;
+          PacketRequestCount <= PacketRequestCount + 1;
           wait for 0 ns;
-          when GET_PACKET =>
-            TransRec.IntFromModel <= PacketWordLength;
+        when GET_PACKET =>
+          TransRec.IntFromModel <= PacketWordLength;
           -- for i in 0 to WordsInPacket - 1 loop
           --   pop(ReceivePacketFifo, vPacketData(i));
           -- end loop;
@@ -195,7 +195,7 @@ begin
 
         when GET_TRANSACTION_COUNT =>
           --!! This is GetTotalTransactionCount vs. GetPendingTransactionCount
-          --!!  Get Pending Get Count = GetFifoCount(ReceiveFifo)
+          --!!  Get Pending Get Count = GetFifoCount(PacketFifo)
           TransRec.IntFromModel <= WordReceiveCount;
           wait for 0 ns;
 
@@ -207,12 +207,12 @@ begin
               -- todo
             when PACKET_TRANSFER =>
               PacketTransfer <= TransRec.BoolToModel;
+              wait for 0 ns;
               if (PacketTransfer = true) then
                 Log(ModelID, "Packet Transfer set to true", INFO, TRUE);
               else
                 Log(ModelID, "Packet Transfer set to false", INFO, TRUE);
               end if;
-              wait for 0 ns;
             when BYTE_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
 
@@ -297,10 +297,12 @@ begin
         -- if no request, wait until we have one
         --!! Note:  > breaks when **RequestCount > 2**30 
         if not (WordRequestCount > WordReceiveCount or PacketRequestCount > PacketReceiveCount) then
+          LOG(ModelID,"wait until packet is requested", INFO, TRUE);
           wait until (WordRequestCount > WordReceiveCount) or (PacketRequestCount > PacketReceiveCount) or not WaitForGet;
         end if;
       end if;
       if PacketRequestCount > PacketReceiveCount then
+        LOG(ModelID,"packet is requested", INFO, TRUE);
         -- Packet Mode
         DoAvalonStreamPacketReadyHandshake(
         Clk           => Clk,
@@ -308,6 +310,7 @@ begin
         Ready         => Ready,
         StartOfPacket => StartOfPacket,
         EndOfPacket   => EndOfPacket,
+        PacketReceivedCount => PacketReceiveCount,
         Data          => Data,
         TransRec      => TransRec,
         WordsInPacket => PacketWordLength,
@@ -330,54 +333,56 @@ begin
         tpd_Clk_Ready    => tpd_Clk_oReady,
         AlertLogID       => ModelID
         );
-        vData := Data;
-        if (ByteOrder = true) then
-          vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
-          for i in 0 to vSymbolCount - 1 loop
-            vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
-            Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
-          end loop;
-          push(ReceiveFifo, vDataReverse);
-          Log(ModelID,
-          "AvalonStream Receive." &
-          "  DataReversed: " & to_hxstring(vDataReverse) &
-          "  Operation# " & to_string (WordReceiveCount + 1),
-          ALWAYS
-          );
+      end if;
+      vData := Data;
+      if (ByteOrder = true) then
+        vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
+        for i in 0 to vSymbolCount - 1 loop
+          vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
+          Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
+        end loop;
+        push(PacketFifo, vDataReverse);
+        Log(ModelID,
+        "AvalonStream Receive." &
+        "  DataReversed: " & to_hxstring(vDataReverse) &
+        "  Operation# " & to_string (WordReceiveCount + 1),
+        ALWAYS
+        );
+      else
+        push(PacketFifo, vData);
+        Log(ModelID,
+        "AvalonStream Receive." &
+        "  Data: " & to_hxstring(vData) &
+        "  Operation# " & to_string (WordReceiveCount + 1),
+        ALWAYS
+        );
+      end if;
+      if PacketRequestCount > PacketReceiveCount then
+       
+        -- Paketweise Empfang
+        if EndOfPacket = '1' then
+          StartOfNewStream   <= 1;
+          Ready              <= '0' after tpd_Clk_oReady;
+          PacketReceiveCount <= PacketReceiveCount + 1;
+          increment(PacketReceiveCount);
+          InPacket := false;
         else
-          push(ReceiveFifo, vData);
-          Log(ModelID,
-          "AvalonStream Receive." &
-          "  Data: " & to_hxstring(vData) &
-          "  Operation# " & to_string (WordReceiveCount + 1),
-          ALWAYS
-          );
+          StartOfNewStream <= 0;
+          InPacket := true;
         end if;
-        if PacketRequestCount > PacketReceiveCount then
-          -- Paketweise Empfang
-          if EndOfPacket = '1' then
-            StartOfNewStream <= 1;
-            Ready            <= '0' after tpd_Clk_oReady;
-            increment(PacketReceiveCount);
-            InPacket := false;
-          else
-            StartOfNewStream <= 0;
-            InPacket := true;
-          end if;
+      else
+        if (WordReceiveCount + 1 = WordRequestCount) then
+          StartOfNewStream <= 1;
+          Ready            <= '0' after tpd_Clk_oReady;
         else
-          if (WordReceiveCount + 1 = WordRequestCount) then
-            StartOfNewStream <= 1;
-            Ready            <= '0' after tpd_Clk_oReady;
-          else
-            if (ReadyAllowance > 0) and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
-              Ready <= '0' after tpd_Clk_oReady;
-            end if;
-            StartOfNewStream <= 0;
+          if (ReadyAllowance > 0) and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
+            Ready <= '0' after tpd_Clk_oReady;
           end if;
+          StartOfNewStream <= 0;
+        end if;
 
-          increment(WordReceiveCount);
-          wait for 0 ns;
-        end if;
+        increment(WordReceiveCount);
+        wait for 0 ns;
       end if;
     end loop ReceiveLoop;
   end process ReceiveHandler;

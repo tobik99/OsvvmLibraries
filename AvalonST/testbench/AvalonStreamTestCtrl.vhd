@@ -52,12 +52,13 @@ entity AvalonST_TestCtrl is
   port (
     -- Global Signal Interface
     Reset : in std_logic;
-    Clk    : in std_logic;
+    Clk   : in std_logic;
 
     -- Record Interface
     StreamTxRec : inout StreamRecType;
     StreamRxRec : inout StreamRecType
   );
+
+  alias TxPacketFifo : ScoreboardIdType is StreamTxRec.BurstFifo;
+  alias RxPacketFifo : ScoreboardIdType is StreamRxRec.BurstFifo;
 end AvalonST_TestCtrl;
-
-
