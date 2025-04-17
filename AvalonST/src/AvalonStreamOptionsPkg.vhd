@@ -18,7 +18,8 @@ package AvalonStreamOptionsPkg is
     BEATS_PER_CYCLE,       -- Integer
     SYMBOL_WIDTH,          -- Integer
     BYTE_ORDER,            -- Boolean
-    READY_LATENCY          -- Integer
+    READY_LATENCY,         -- Integer
+    PACKET_TRANSFER        -- Boolean
     --DROP_UNDRIVEN,
     --THE_END
   );

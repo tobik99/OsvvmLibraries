@@ -42,10 +42,9 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
-
-
 library osvvm;
 context osvvm.OsvvmContext;
+use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_common;
 context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
@@ -109,11 +108,21 @@ package AvalonStreamComponentPkg is
     constant TimeOutPeriod    : in time           := - 1 sec
   );
 
-  procedure reverse_endian (
-    constant symbol_width : integer; -- z.?B. 8, 16, 4
-    constant word_width   : integer; -- z.?B. 32, 64
-    variable data_in        : in std_logic_vector(word_width - 1 downto 0);
-    variable data_out       : out std_logic_vector(word_width - 1 downto 0)
+  procedure DoAvalonStreamPacketReadyHandshake (
+    signal Clk              : in std_logic;
+    signal Valid            : in std_logic;
+    signal Ready            : inout std_logic;
+    signal StartOfPacket    : in std_logic;
+    signal EndOfPacket      : in std_logic;
+    signal Data             : in std_logic_vector;
+    signal TransRec             : inout StreamRecType;
+    signal WordsInPacket : inout integer;
+    constant ByteOrder      : in boolean;
+    constant SymbolWidth    : in integer;
+    constant tpd_Clk_Ready  : in time;
+    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string         := "";
+    constant TimeOutPeriod  : in time           := - 1 sec
   );
 
 end package AvalonStreamComponentPkg;
@@ -275,17 +284,73 @@ package body AvalonStreamComponentPkg is
     end if;
     -- end if;
   end procedure DoAvalonStreamReadyHandshake;
-  procedure reverse_endian (
-    constant symbol_width : integer; -- z.?B. 8, 16, 4
-    constant word_width   : integer; -- z.?B. 32, 64
-    variable data_in        : in std_logic_vector(word_width - 1 downto 0);
-    variable data_out       : out std_logic_vector(word_width - 1 downto 0)
+  procedure DoAvalonStreamPacketReadyHandshake (
+    signal Clk              : in std_logic;
+    signal Valid            : in std_logic;
+    signal Ready            : inout std_logic;
+    signal StartOfPacket    : in std_logic;
+    signal EndOfPacket      : in std_logic;
+    signal Data             : in std_logic_vector;
+    signal TransRec             : inout StreamRecType;
+    signal WordsInPacket : inout integer;
+    constant ByteOrder      : in boolean;
+    constant SymbolWidth    : in integer;
+    constant tpd_Clk_Ready  : in time;
+    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string         := "";
+    constant TimeOutPeriod  : in time           := - 1 sec
   ) is
-    constant symbol_count : integer := word_width / symbol_width;
+    variable vData, vDataReverse : std_logic_vector(Data'range);
+    variable vSymbolCount        : integer := 0;
   begin
-    for i in 0 to symbol_count - 1 loop
-      data_out((i + 1) * symbol_width - 1 downto i * symbol_width) :=
-      data_in((symbol_count - i) * symbol_width - 1 downto (symbol_count - i - 1) * symbol_width);
+
+    -- Warten auf StartOfPacket
+    WordsInPacket <= 0;
+    loop
+      Ready <= '1' after tpd_Clk_Ready;
+
+      if TimeOutPeriod > 0 sec then
+        wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1' for TimeOutPeriod;
+      else
+        wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
+      end if;
+
+      exit when Valid = '1' and StartOfPacket = '1';
     end loop;
+    loop
+      -- Immer direkt Ready setzen
+      Ready <= '1' after tpd_Clk_Ready;
+
+      -- Auf gültige Daten warten
+      if TimeOutPeriod > 0 sec then
+        wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
+      else
+        wait on Clk until Clk = '1' and Valid = '1';
+      end if;
+
+      if Valid = '1' then
+        -- Daten übernehmen
+        vData := Data;
+        if ByteOrder then
+          vSymbolCount := Data'length / SymbolWidth;
+          for i in 0 to vSymbolCount - 1 loop
+            vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
+            Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
+          end loop;
+          push(TransRec.BurstFifo, vDataReverse);
+          WordsInPacket <= WordsInPacket + 1;
+          Log(AlertLogID, "PacketTransfer: Received Reversed Word: " & to_hxstring(vDataReverse), ALWAYS);
+        else
+          push(TransRec.BurstFifo, vData);
+          Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), ALWAYS);
+        end if;
+
+        -- Wenn EndOfPacket = 1, abbrechen
+        exit when EndOfPacket = '1';
+      else
+        Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
+      end if;
+    end loop;
+    Ready <= '0' after tpd_Clk_Ready;
   end procedure;
 end package body AvalonStreamComponentPkg;

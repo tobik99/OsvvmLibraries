@@ -49,19 +49,21 @@ entity AvalonStreamReceiver is
 end AvalonStreamReceiver;
 
 architecture bhv of AvalonStreamReceiver is
-  signal ModelID, ProtocolID                   : AlertLogIDType;
-  signal DataCheckID, BusFailedID, BurstFifoID : AlertLogIDType;
-  signal ReceiveFifo                           : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
-  signal WordRequestCount                      : integer := 0;
-  signal WordReceiveCount                      : integer := 0;
-  signal ReceiveByteCount, TransferByteCount   : integer := 0;
-  signal StartOfNewStream                      : integer := 1;
+  signal ModelID                                : AlertLogIDType;
+  signal DataCheckID                            : AlertLogIDType;
+  signal ReceiveFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
+  signal WordRequestCount, WordReceiveCount     : integer := 0;
+  signal PacketRequestCount, PacketReceiveCount : integer := 0;
+  signal PacketWordLength                          : integer := 0;
+  signal StartOfNewStream                       : integer := 1;
   -- Verification Component Configuration
-  signal WaitForGet     : boolean := TRUE;
+  signal WaitForGet     : boolean := true;
   signal ReadyLatency   : integer := 0;
   signal ReadyAllowance : integer := 0;
   signal ByteOrder      : boolean := false; -- big endian is default
   signal SymbolWidth    : natural := 8;     -- default is 8 bits
+  signal PacketTransfer : boolean := false;
+
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -87,9 +89,10 @@ begin
     variable DispatcherReceiveCount          : integer := 0;
     variable WordCount                       : integer;
     variable TryWordWaiting, TryBurstWaiting : boolean;
-    variable FifoWordCount, CheckWordCount   : integer;
+    variable CheckWordCount   : integer;
     variable vData, ExpectedData, PopData    : std_logic_vector(Data'range);
     variable vSymbolWidth                    : integer := 0;
+    variable vPacketData                     : slv_array_t(0 to WordsInPacket - 1)(AVALON_STREAM_DATA_WIDTH - 1 downto 0); -- todo receivePacketCount stimmt hier nicht ganz
   begin
     wait for 0 ns;
 
@@ -102,7 +105,6 @@ begin
 
       case Operation is
         when GET | TRY_GET =>
-
           if IsEmpty(ReceiveFifo) and IsTry(Operation) then
             if not TryWordWaiting then
               increment(WordRequestCount);
@@ -170,9 +172,23 @@ begin
         when RECEIVE =>
           WordRequestCount <= WordRequestCount + TransRec.IntToModel;
           wait for 0 ns;
+        when RECEIVE_PACKET =>
+          PacketRequestCount <= PacketRequestCount + TransRec.IntToModel;
+          wait for 0 ns;
+          when GET_PACKET =>
+            TransRec.IntFromModel <= PacketWordLength;
+          -- for i in 0 to WordsInPacket - 1 loop
+          --   pop(ReceivePacketFifo, vPacketData(i));
+          -- end loop;
+          --   TransRec.IntFromModel  <=WordsInPacket;
+          --   TransRec.DataFromModel <= vPacketData;
+          --   wait for 0 ns;
         when WAIT_FOR_TRANSACTION =>
           if (WordReceiveCount /= WordRequestCount) then
             wait until WordReceiveCount = WordRequestCount;
+          end if;
+          if (PacketRequestCount /= PacketReceiveCount) then
+            wait until PacketReceiveCount = PacketRequestCount;
           end if;
         when WAIT_FOR_CLOCK =>
           WaitForClock(Clk, TransRec.IntToModel);
@@ -189,7 +205,15 @@ begin
               -- todo
             when BEATS_PER_CYCLE =>
               -- todo
-              when BYTE_ORDER =>
+            when PACKET_TRANSFER =>
+              PacketTransfer <= TransRec.BoolToModel;
+              if (PacketTransfer = true) then
+                Log(ModelID, "Packet Transfer set to true", INFO, TRUE);
+              else
+                Log(ModelID, "Packet Transfer set to false", INFO, TRUE);
+              end if;
+              wait for 0 ns;
+            when BYTE_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
 
               if (ByteOrder = true) then
@@ -232,7 +256,10 @@ begin
               -- todo
             when BEATS_PER_CYCLE =>
               -- todo
-              when BYTE_ORDER =>
+            when PACKET_TRANSFER =>
+              TransRec.BoolFromModel <= PacketTransfer;
+
+            when BYTE_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
             when SYMBOL_WIDTH =>
               TransRec.IntFromModel <= SymbolWidth;
@@ -255,6 +282,8 @@ begin
     variable vSymbolCount        : integer := 0;
     variable ReadyBeforeValid    : integer := 1;
     variable ReadyDelayCycles    : integer := 0;
+
+    variable InPacket : boolean := false;
   begin
     -- Initialize
     Ready <= '0';
@@ -267,66 +296,89 @@ begin
       if WaitForGet then
         -- if no request, wait until we have one
         --!! Note:  > breaks when **RequestCount > 2**30 
-        if not (WordRequestCount > WordReceiveCount) then
-          wait until (WordRequestCount > WordReceiveCount) or not WaitForGet;
+        if not (WordRequestCount > WordReceiveCount or PacketRequestCount > PacketReceiveCount) then
+          wait until (WordRequestCount > WordReceiveCount) or (PacketRequestCount > PacketReceiveCount) or not WaitForGet;
         end if;
       end if;
-
-      ---------------------
-      DoAvalonStreamReadyHandshake (
-      ---------------------
-      Clk              => Clk,
-      Valid            => Valid,
-      Ready            => Ready,
-      WordRequestCount => WordRequestCount,
-      WordReceiveCount => WordReceiveCount,
-      ReadyAllowance   => ReadyAllowance,
-      ReadyBeforeValid => ReadyBeforeValid = 1,
-      ReadyDelayCycles => ReadyDelayCycles * tperiod_Clk,
-      tpd_Clk_Ready    => tpd_Clk_oReady,
-      AlertLogID       => ModelID
-      );
-
-      vData := Data;
-      if (ByteOrder = true) then
-        vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
-        for i in 0 to vSymbolCount - 1 loop
-          vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
-          Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
-        end loop;
-        push(ReceiveFifo, vDataReverse);
-        Log(ModelID,
-        "AvalonStream Receive." &
-        "  DataReversed: " & to_hxstring(vDataReverse) &
-        "  Operation# " & to_string (WordReceiveCount + 1),
-        ALWAYS
+      if PacketRequestCount > PacketReceiveCount then
+        -- Packet Mode
+        DoAvalonStreamPacketReadyHandshake(
+        Clk           => Clk,
+        Valid         => Valid,
+        Ready         => Ready,
+        StartOfPacket => StartOfPacket,
+        EndOfPacket   => EndOfPacket,
+        Data          => Data,
+        TransRec      => TransRec,
+        WordsInPacket => PacketWordLength,
+        ByteOrder     => ByteOrder,
+        SymbolWidth   => SymbolWidth,
+        tpd_Clk_Ready => tpd_Clk_oReady,
+        AlertLogID    => ModelID
         );
       else
-        push(ReceiveFifo, vData);
-        Log(ModelID,
-        "AvalonStream Receive." &
-        "  Data: " & to_hxstring(vData) &
-        "  Operation# " & to_string (WordReceiveCount + 1),
-        ALWAYS
+        -- Normaler Empfangsmodus ohne PacketTransfer
+        DoAvalonStreamReadyHandshake(
+        Clk              => Clk,
+        Valid            => Valid,
+        Ready            => Ready,
+        WordRequestCount => WordRequestCount,
+        WordReceiveCount => WordReceiveCount,
+        ReadyAllowance   => ReadyAllowance,
+        ReadyBeforeValid => ReadyBeforeValid = 1,
+        ReadyDelayCycles => ReadyDelayCycles * tperiod_Clk,
+        tpd_Clk_Ready    => tpd_Clk_oReady,
+        AlertLogID       => ModelID
         );
-      end if;
-
-
-      if (WordReceiveCount + 1 = WordRequestCount) then
-        StartOfNewStream <= 1;
-        Ready            <= '0' after tpd_Clk_oReady;
-        --Data <= (others => 'U');
-      else
-        if (ReadyAllowance > 0) and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then -- todo this if might not be necessary
-          Ready <= '0' after tpd_Clk_oReady;
+        vData := Data;
+        if (ByteOrder = true) then
+          vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
+          for i in 0 to vSymbolCount - 1 loop
+            vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
+            Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
+          end loop;
+          push(ReceiveFifo, vDataReverse);
+          Log(ModelID,
+          "AvalonStream Receive." &
+          "  DataReversed: " & to_hxstring(vDataReverse) &
+          "  Operation# " & to_string (WordReceiveCount + 1),
+          ALWAYS
+          );
+        else
+          push(ReceiveFifo, vData);
+          Log(ModelID,
+          "AvalonStream Receive." &
+          "  Data: " & to_hxstring(vData) &
+          "  Operation# " & to_string (WordReceiveCount + 1),
+          ALWAYS
+          );
         end if;
-        StartOfNewStream <= 0;
+        if PacketRequestCount > PacketReceiveCount then
+          -- Paketweise Empfang
+          if EndOfPacket = '1' then
+            StartOfNewStream <= 1;
+            Ready            <= '0' after tpd_Clk_oReady;
+            increment(PacketReceiveCount);
+            InPacket := false;
+          else
+            StartOfNewStream <= 0;
+            InPacket := true;
+          end if;
+        else
+          if (WordReceiveCount + 1 = WordRequestCount) then
+            StartOfNewStream <= 1;
+            Ready            <= '0' after tpd_Clk_oReady;
+          else
+            if (ReadyAllowance > 0) and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
+              Ready <= '0' after tpd_Clk_oReady;
+            end if;
+            StartOfNewStream <= 0;
+          end if;
+
+          increment(WordReceiveCount);
+          wait for 0 ns;
+        end if;
       end if;
-
-      -- Signal completion
-      increment(WordReceiveCount);
-      wait for 0 ns;
-
     end loop ReceiveLoop;
   end process ReceiveHandler;
 end bhv;

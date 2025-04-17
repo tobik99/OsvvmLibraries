@@ -48,13 +48,15 @@ architecture bhv of AvalonStreamTransmitter is
   signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
-
+  signal PacketRequestCount, PacketTransmitCount : integer := 0;
+  signal PacketWordLength                      : integer := 0;
   -- Verification Component Configuration
   signal ReadyLatency                                    : integer := 0;
   signal ReadyAllowance                                  : integer := 0;
   signal ByteOrder                                       : boolean := false; -- big endian is default
   signal SymbolWidth                                     : natural := 8;     -- default is 8 bits
   signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
+  signal PacketTransfer                                  : boolean := false;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -75,7 +77,7 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData, vDataReverse                      : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData, vDataReverse        : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable vSymbolWidth, vSymbolCount : integer := 0;
     variable NumberTransfers            : integer;
   begin
@@ -97,11 +99,11 @@ begin
               vDataReverse((i + 1) * SymbolWidth - 1 downto i * SymbolWidth) :=
               vData((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth);
             end loop;
-              Push(TransmitFifo, vDataReverse);
-            else 
-              Push(TransmitFifo, vData);
+            Push(TransmitFifo, vDataReverse);
+          else
+            Push(TransmitFifo, vData);
           end if;
-          
+
           Increment(TransmitRequestCount);
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
@@ -113,6 +115,11 @@ begin
           if TransmitRequestCount /= TransmitDoneCount then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
+
+        when SEND_PACKET =>
+          PacketWordLength <= TransRec.IntToModel;
+          wait for 0 ns;
+          -- todo, check if packet transport is enabled
 
         when WAIT_FOR_CLOCK =>
           WaitForClock(Clk, TransRec.IntToModel);
@@ -129,6 +136,14 @@ begin
               -- todo
             when BEATS_PER_CYCLE =>
               -- todo
+            when PACKET_TRANSFER =>
+              PacketTransfer <= TransRec.BoolToModel;
+              if (PacketTransfer = true) then
+                Log(ModelID, "Packet Transfer set to true", INFO, TRUE);
+              else
+                Log(ModelID, "Packet Transfer set to false", INFO, TRUE);
+              end if;
+              wait for 0 ns;
             when BYTE_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -171,6 +186,8 @@ begin
               -- todo
             when BEATS_PER_CYCLE =>
               -- todo
+            when PACKET_TRANSFER =>
+              TransRec.BoolFromModel <= PacketTransfer;
             when BYTE_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
             when SYMBOL_WIDTH =>
@@ -190,7 +207,6 @@ begin
   end process TransactionDispatcher;
 
   TransmitHandler : process is
-    variable vValid : std_logic;
     variable vData  : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
 
   begin
@@ -201,7 +217,7 @@ begin
 
     TransmitLoop : loop
       -- Find Transaction
-      if IsEmpty(TransmitFifo) then
+      if IsEmpty(TransmitFifo) and not PacketTransfer then
         WaitForToggle(TransmitRequestCount);
       end if;
       -- Get Transaction
@@ -221,7 +237,6 @@ begin
         Valid                     <= '0' after tpd_Clk_Valid;
         Data                      <= (vData'range => 'X');
         ReadyAllowanceCyclesCount <= ReadyAllowance;
-        --Data <= (others => 'U');
       else
         StartOfNewStream <= 0;
       end if;
