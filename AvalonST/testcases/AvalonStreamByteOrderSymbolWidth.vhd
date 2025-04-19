@@ -122,3 +122,11 @@ variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
   end process receiver_proc;
 
 end architecture ByteOrderSymbolWidth;
+
+configuration AvalonStreamByteOrderSymbolWidth of AvalonStreamTestHarness is
+  for bhv
+    for TestCtrl_1 : AvalonST_TestCtrl
+      use entity osvvm_avalonst.AvalonST_TestCtrl(ByteOrderSymbolWidth);
+    end for;
+  end for;
+end AvalonStreamByteOrderSymbolWidth;

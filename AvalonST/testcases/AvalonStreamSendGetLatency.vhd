@@ -14,7 +14,7 @@ begin
   ------------------------------------------------------------
   ControlProc : process
   begin
-    SetTestName("AvalonStreamSendGetAsync");
+    SetTestName("AvalonStreamSendGetLatency");
     SetLogEnable(PASSED, TRUE);
     SetLogEnable(INFO, TRUE);
 
@@ -79,16 +79,22 @@ begin
     wait until Reset = '1';
     wait for 0 ns;
     WaitForBarrier(SyncPoint);
+    Receive(StreamRxRec, 4);
+    WaitForTransaction(StreamRxRec);
     for i in 0 to 3 loop
       Check(StreamRxRec, ExpData);
       ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
     end loop;
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
+    Receive(StreamRxRec, 1);
+    WaitForTransaction(StreamRxRec);
     Check(StreamRxRec, ExpData);
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
     ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+    Receive(StreamRxRec, 4);
+    WaitForTransaction(StreamRxRec);
     for i in 0 to 3 loop
       Check(StreamRxRec, ExpData);
       ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
@@ -103,3 +109,11 @@ begin
   end process receiver_proc;
 
 end architecture SendGetLatency;
+
+configuration AvalonStreamSendGetLatency of AvalonStreamTestHarness is
+  for bhv
+    for TestCtrl_1 : AvalonST_TestCtrl
+      use entity osvvm_avalonst.AvalonST_TestCtrl(SendGetLatency);
+    end for;
+  end for;
+end AvalonStreamSendGetLatency;

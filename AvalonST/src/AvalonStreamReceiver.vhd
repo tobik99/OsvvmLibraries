@@ -320,6 +320,7 @@ begin
         AlertLogID    => ModelID
         );
       else
+        LOG(ModelID,"words requested", INFO, TRUE);
         -- Normaler Empfangsmodus ohne PacketTransfer
         DoAvalonStreamReadyHandshake(
         Clk              => Clk,

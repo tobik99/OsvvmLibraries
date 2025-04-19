@@ -14,7 +14,7 @@ begin
   ------------------------------------------------------------
   ControlProc : process
   begin
-    SetTestName("AvalonStreamSendGetAsync");
+    SetTestName("AvalonStreamReadyLatencyAllowance");
     SetLogEnable(PASSED, TRUE);
     SetLogEnable(INFO, TRUE);
 
@@ -136,3 +136,11 @@ variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
   end process receiver_proc;
 
 end architecture ReadyLatencyAllowance;
+
+configuration AvalonStreamReadyLatencyAllowance of AvalonStreamTestHarness is
+  for bhv
+    for TestCtrl_1 : AvalonST_TestCtrl
+      use entity osvvm_avalonst.AvalonST_TestCtrl(ReadyLatencyAllowance);
+    end for;
+  end for;
+end AvalonStreamReadyLatencyAllowance;

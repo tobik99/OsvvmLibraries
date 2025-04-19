@@ -36,21 +36,9 @@
 #  
 #include ../../OsvvmLibraries.pro
 
-library osvvm_avalonst
-analyze ../src/AvalonStreamOptionsPkg.vhd
-analyze ../src/AvalonStreamComponentPkg.vhd
-analyze ../src/AvalonStreamContext.vhd
-analyze ../src/AvalonStreamTransmitter.vhd
-analyze ../src/AvalonStreamReceiver.vhd
-
-analyze ../testbench/AvalonStreamTestCtrl.vhd
-analyze ../testbench/AvalonStreamPacketTransport.vhd
-analyze ../testbench/AvalonStreamSendGetTest.vhd
-analyze ../testbench/AvalonStreamSendGetLatency.vhd
-analyze ../testbench/AvalonStreamReadyLatencyAllowance.vhd
-analyze ../testbench/AvalonStreamByteOrderSymbolWidth.vhd
-analyze ../testbench/AvalonStreamTestHarness.vhd
+TestSuite AvalonStream
+include ../src/build.pro
+include ../testbench/testbench.pro
 
 SetSaveWaves true
-simulate AvalonStreamTestHarness
-#RunTest AvalonST_test_harness
+RunTest AvalonStreamSendGetLatency.vhd

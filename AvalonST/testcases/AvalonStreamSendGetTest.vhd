@@ -1,5 +1,5 @@
 
-architecture SendGet of AvalonST_TestCtrl is
+architecture AvalonStreamSendGetTest of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
   signal TestDone   : integer_barrier               := 1;
   signal ExpData    : std_logic_vector(31 downto 0) := x"FFFFFFFF";
@@ -14,7 +14,7 @@ begin
   begin
     -- Initialization of test
    
-    SetTestName("AvalonST_SendGet");
+    SetTestName("AvalonStreamSendGetTest");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE);   -- Enable INFO logs
     -- Scoreboard initialization
@@ -67,4 +67,15 @@ begin
     wait;
   end process receiver_proc;
 
-end architecture SendGet;
+end architecture AvalonStreamSendGetTest;
+
+configuration AvalonStreamSendGetTest of AvalonStreamTestHarness is
+  for bhv
+    for TestCtrl_1 : AvalonST_TestCtrl
+      use entity osvvm_avalonst.AvalonST_TestCtrl(AvalonStreamSendGetTest);
+    end for;
+  end for;
+end AvalonStreamSendGetTest;
+
+
+

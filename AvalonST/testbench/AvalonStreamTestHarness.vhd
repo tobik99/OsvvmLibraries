@@ -29,7 +29,17 @@ architecture bhv of AvalonStreamTestHarness is
   ParamToModel (32 - 1 downto 0),
   ParamFromModel(32 - 1 downto 0)
   );
-
+  component AvalonST_TestCtrl is
+    port (
+      -- Global Signal Interface
+      Reset : in std_logic;
+      Clk   : in std_logic;
+  
+      -- Record Interface
+      StreamTxRec : inout StreamRecType;
+      StreamRxRec : inout StreamRecType
+    );
+    end component AvalonST_TestCtrl;
 begin
 
   -- create Clock 
@@ -89,7 +99,7 @@ begin
 
   -- DUT
   -- test
-  TestCtrl_2 : entity osvvm_avalonst.AvalonST_TestCtrl(AvalonStreamPacketTransport)
+  TestCtrl_1 : entity osvvm_avalonst.AvalonST_TestCtrl
     port map(
       -- Globals
       Reset => Reset,

@@ -2,7 +2,7 @@ library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
 
 
-architecture AvalonStreamPacketTransport of AvalonST_TestCtrl is
+architecture PacketTransport of AvalonST_TestCtrl is
 
   signal TestDone  : integer_barrier := 1;
   signal SyncPoint : integer_barrier := 1;
@@ -15,7 +15,7 @@ begin
   ------------------------------------------------------------
   ControlProc : process
   begin
-    SetTestName("AvalonStreamByteOrderSymbolWidth");
+    SetTestName("AvalonStreamPacketTransport");
     SetLogEnable(PASSED, TRUE);
     SetLogEnable(INFO, TRUE);
 
@@ -86,4 +86,12 @@ begin
     wait;
   end process receiver_proc;
 
-end architecture AvalonStreamPacketTransport;
+end architecture PacketTransport;
+
+configuration AvalonStreamPacketTransport of AvalonStreamTestHarness is
+  for bhv
+    for TestCtrl_1 : AvalonST_TestCtrl
+      use entity osvvm_avalonst.AvalonST_TestCtrl(PacketTransport);
+    end for;
+  end for;
+end AvalonStreamPacketTransport;
