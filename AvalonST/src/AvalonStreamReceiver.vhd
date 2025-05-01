@@ -177,12 +177,16 @@ begin
           wait for 0 ns;
         when GET_PACKET =>
           TransRec.IntFromModel <= PacketWordLength;
-          -- for i in 0 to WordsInPacket - 1 loop
-          --   pop(ReceivePacketFifo, vPacketData(i));
-          -- end loop;
-          --   TransRec.IntFromModel  <=WordsInPacket;
-          --   TransRec.DataFromModel <= vPacketData;
-          --   wait for 0 ns;
+        when CHECK_WORD_OF_PACKET =>
+          vData        := pop(TransRec.BurstFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+          ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
+          AffirmIf(DataCheckID,
+          (MetaMatch(vData, ExpectedData)),
+          "PacketWord: " &
+          " Received.  Data: " & to_hxstring(vData),
+          " Expected.  Data: " & to_hxstring(ExpectedData),
+          TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
+          );
         when WAIT_FOR_TRANSACTION =>
           if (WordReceiveCount /= WordRequestCount) then
             wait until WordReceiveCount = WordRequestCount;
@@ -297,30 +301,29 @@ begin
         -- if no request, wait until we have one
         --!! Note:  > breaks when **RequestCount > 2**30 
         if not (WordRequestCount > WordReceiveCount or PacketRequestCount > PacketReceiveCount) then
-          LOG(ModelID,"wait until packet is requested", INFO, TRUE);
           wait until (WordRequestCount > WordReceiveCount) or (PacketRequestCount > PacketReceiveCount) or not WaitForGet;
         end if;
       end if;
       if PacketRequestCount > PacketReceiveCount then
-        LOG(ModelID,"packet is requested", INFO, TRUE);
+        LOG(ModelID, "packet is requested", INFO, TRUE);
         -- Packet Mode
         DoAvalonStreamPacketReadyHandshake(
-        Clk           => Clk,
-        Valid         => Valid,
-        Ready         => Ready,
-        StartOfPacket => StartOfPacket,
-        EndOfPacket   => EndOfPacket,
+        Clk                 => Clk,
+        Valid               => Valid,
+        Ready               => Ready,
+        StartOfPacket       => StartOfPacket,
+        EndOfPacket         => EndOfPacket,
         PacketReceivedCount => PacketReceiveCount,
-        Data          => Data,
-        TransRec      => TransRec,
-        WordsInPacket => PacketWordLength,
-        ByteOrder     => ByteOrder,
-        SymbolWidth   => SymbolWidth,
-        tpd_Clk_Ready => tpd_Clk_oReady,
-        AlertLogID    => ModelID
+        Data                => Data,
+        TransRec            => TransRec,
+        WordsInPacket       => PacketWordLength,
+        ByteOrder           => ByteOrder,
+        SymbolWidth         => SymbolWidth,
+        tpd_Clk_Ready       => tpd_Clk_oReady,
+        AlertLogID          => ModelID
         );
       else
-        LOG(ModelID,"words requested", INFO, TRUE);
+        LOG(ModelID, "words requested", INFO, TRUE);
         -- Normaler Empfangsmodus ohne PacketTransfer
         DoAvalonStreamReadyHandshake(
         Clk              => Clk,
@@ -359,7 +362,7 @@ begin
         );
       end if;
       if PacketRequestCount > PacketReceiveCount then
-       
+
         -- Paketweise Empfang
         if EndOfPacket = '1' then
           StartOfNewStream   <= 1;

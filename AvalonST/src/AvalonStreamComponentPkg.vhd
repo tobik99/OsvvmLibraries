@@ -318,6 +318,20 @@ package body AvalonStreamComponentPkg is
         wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
       end if;
       LOG(AlertLogID,"start of packet", INFO, TRUE);
+      vData := Data;
+        if ByteOrder then
+          vSymbolCount := Data'length / SymbolWidth;
+          for i in 0 to vSymbolCount - 1 loop
+            vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
+            Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
+          end loop;
+          push(TransRec.BurstFifo, vDataReverse);
+          Log(AlertLogID, "PacketTransfer: Received Reversed Word: " & to_hxstring(vDataReverse), ALWAYS);
+        else
+          push(TransRec.BurstFifo, vData);
+          Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), ALWAYS);
+        end if;
+        WordsInPacket <= WordsInPacket + 1;
       exit when Valid = '1' and StartOfPacket = '1';
     end loop;
     loop
@@ -342,13 +356,13 @@ package body AvalonStreamComponentPkg is
             Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
           end loop;
           push(TransRec.BurstFifo, vDataReverse);
-          WordsInPacket <= WordsInPacket + 1;
           Log(AlertLogID, "PacketTransfer: Received Reversed Word: " & to_hxstring(vDataReverse), ALWAYS);
         else
           push(TransRec.BurstFifo, vData);
           Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), ALWAYS);
         end if;
-
+        WordsInPacket <= WordsInPacket + 1;
+        wait for 0 ns;
         -- Wenn EndOfPacket = 1, abbrechen
         exit when EndOfPacket = '1';
       else

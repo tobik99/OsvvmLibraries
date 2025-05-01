@@ -50,7 +50,6 @@ begin
     "00000000000000000000000000001001", -- 9
     "00000000000000000000000000001010"  -- 10
 );
-
   begin
     wait until Reset = '1';
     wait for 0 ns;
@@ -72,6 +71,20 @@ begin
   ------------------------------------------------------------
   receiver_proc : process
     variable Available : boolean := false;
+    variable PacketLength : integer := 0;
+    variable PacketWord : std_logic_vector(31 downto 0);
+    variable ExpData : slv_array_t(0 to 9)(31 downto 0) := (
+      "00000000000000000000000000000001", -- 1
+      "00000000000000000000000000000010", -- 2
+      "00000000000000000000000000000011", -- 3
+      "00000000000000000000000000000100", -- 4
+      "00000000000000000000000000000101", -- 5
+      "00000000000000000000000000000110", -- 6
+      "00000000000000000000000000000111", -- 7
+      "00000000000000000000000000001000", -- 8
+      "00000000000000000000000000001001", -- 9
+      "00000000000000000000000000001010"  -- 10
+  );
     
   begin
     wait until Reset = '1';
@@ -82,6 +95,14 @@ begin
 
     ReceivePacket(StreamRxRec);
    wait for 150 ns;
+   GetPacket(StreamRxRec, PacketLength);
+   Log("PacketLength: " & to_string(PacketLength), INFO, TRUE);
+  --  for i in 0 to PacketLength - 1 loop
+  --   PacketWord := pop(RxPacketFifo);
+  --   Log("PacketWord: " & to_string(PacketWord), INFO, TRUE);
+  --   AffirmIf(PacketWord = ExpData(i), "Data: " & to_string(PacketWord) & " /= Expected: " & to_string(ExpData(i)));
+  --  end loop;
+    CheckPacket(StreamRxRec, ExpData);
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;
