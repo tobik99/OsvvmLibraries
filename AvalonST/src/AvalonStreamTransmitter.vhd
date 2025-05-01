@@ -14,11 +14,14 @@ entity AvalonStreamTransmitter is
     MODEL_ID_NAME            : string                  := "";
     AVALON_STREAM_DATA_WIDTH : integer range 1 to 8192 := 32;
 
-    DEFAULT_DELAY : time := 1 ns;
-    tpd_Clk_Valid : time := DEFAULT_DELAY;
-    tperiod_Clk   : time := 10 ns;
-    tpd_Clk_oData : time := DEFAULT_DELAY
+    DEFAULT_DELAY         : time := 1 ns;
+    tpd_Clk_Data          : time := DEFAULT_DELAY;
+    tpd_Clk_Valid         : time := DEFAULT_DELAY;
+    tpd_Clk_StartOfPacket : time := DEFAULT_DELAY;
+    tpd_Clk_EndOfPacket   : time := DEFAULT_DELAY;
+    tpd_Clk_Empty         : time := DEFAULT_DELAY;
     --DEFAULT_CHANNELS   : integer := 1
+    tperiod_Clk : time := 10 ns --todo: could be deleted
   );
   port (
     Clk   : in std_logic;
@@ -83,7 +86,7 @@ begin
     variable NumberTransfers            : integer;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
-    TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME) ;
+    TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME);
     TransactionDispatcherLoop : loop
       WaitForTransaction(
       Clk => Clk,
@@ -118,7 +121,7 @@ begin
           end if;
 
         when SEND_PACKET =>
-          PacketWordLength <= TransRec.IntToModel;
+          PacketWordLength   <= TransRec.IntToModel;
           PacketRequestCount <= PacketRequestCount + 1;
           wait for 0 ns;
           -- todo, check if packet transport is enabled
@@ -134,8 +137,6 @@ begin
 
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
-            when TRANSACTION_FIFO_SIZE =>
-              -- todo
             when BEATS_PER_CYCLE =>
               -- todo
             when PACKET_TRANSFER =>
@@ -146,7 +147,7 @@ begin
               else
                 Log(ModelID, "Packet Transfer set to false", INFO, TRUE);
               end if;
-              
+
             when BYTE_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -185,8 +186,6 @@ begin
           wait for 0 ns;
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
-            when TRANSACTION_FIFO_SIZE =>
-              -- todo
             when BEATS_PER_CYCLE =>
               -- todo
             when PACKET_TRANSFER =>
@@ -214,8 +213,8 @@ begin
 
   begin
     -- initialize outputs
-    Valid <= '0';
-    Data  <= (vData'range => 'X');
+    Valid         <= '0';
+    Data          <= (vData'range => 'X');
     StartOfPacket <= '0';
     EndOfPacket   <= '0';
     Empty         <= '0';
@@ -227,8 +226,8 @@ begin
       end if;
       if PacketTransfer and (PacketRequestCount > PacketTransmitCount) then
 
-        StartOfPacket <= '1';
-        EndOfPacket   <= '0';
+        StartOfPacket <= '1' after tpd_Clk_StartOfPacket;
+        EndOfPacket   <= '0' after tpd_Clk_EndOfPacket;
         wait for 0 ns;
 
         while not IsEmpty(PacketFifo) loop
@@ -249,17 +248,17 @@ begin
           );
 
           DoAvalonStreamValidHandshake(
-          Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
+          Clk, Valid, Ready, StartOfNewStream,
           0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
           "Packet Valid Handshake Timeout", tperiod_Clk * 100
           );
 
           -- Nach erstem Wort SOP zurücksetzen
-          StartOfPacket <= '0';
+          StartOfPacket <= '0' after tpd_Clk_StartOfPacket;
 
           -- Bei EOP fertig
           if EndOfPacket = '1' then
-            EndOfPacket <= '0';
+            EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
             exit;
           end if;
 
@@ -286,7 +285,7 @@ begin
         "  Operation# " & to_string (TransmitDoneCount + 1),
         DEBUG
         );
-        DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream, TransmitRequestCount, TransmitDoneCount,
+        DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
         if (TransmitDoneCount + 1 >= TransmitRequestCount) then

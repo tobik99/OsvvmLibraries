@@ -63,7 +63,7 @@ begin
       AVALON_STREAM_DATA_WIDTH => 32,
       DEFAULT_DELAY            => 1 ns,
       tpd_Clk_Valid            => 1 ns,
-      tpd_Clk_oData            => 1 ns
+      tpd_Clk_Data            => 1 ns
     )
     port map(
       Clk           => Clk,

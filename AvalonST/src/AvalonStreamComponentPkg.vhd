@@ -52,27 +52,32 @@ context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
 --use work.AvalonST_tb_pkg.all;
 
 package AvalonStreamComponentPkg is
-  component AvalonStreamingSource is
+  component AvalonStreamTransmitter is
     generic (
-      MODEL_ID_NAME      : string  := "";
-      DEFAULT_DATA_WIDTH : integer := 8;
-      DEFAULT_DELAY      : time    := 1 ns;
-      tpd_Clk_Address    : time    := DEFAULT_DELAY;
-      tpd_Clk_Write      : time    := DEFAULT_DELAY;
-      tpd_Clk_oData      : time    := DEFAULT_DELAY
+      MODEL_ID_NAME            : string  := "";
+      AVALON_STREAM_DATA_WIDTH : integer := 8;
+      DEFAULT_DELAY            : time    := 1 ns;
+      tpd_Clk_Data             : time    := DEFAULT_DELAY;
+      tpd_Clk_Valid            : time    := DEFAULT_DELAY;
+      tpd_Clk_StartOfPacket    : time    := DEFAULT_DELAY;
+      tpd_Clk_EndOfPacket      : time    := DEFAULT_DELAY;
+      tpd_Clk_Empty            : time    := DEFAULT_DELAY
     );
     port (
-      -- global signals
-      i_clk    : in std_logic;
-      i_nreset : in std_logic;
-      -- testbench transaction interface
-      io_trans_rec : inout StreamRecType;
-      -- AvalonST functional interface
-      o_data  : out std_logic_vector(DEFAULT_DATA_WIDTH - 1 downto 0);
-      o_valid : out std_logic;
-      i_ready : in std_logic
-    );
-  end component AvalonStreamingSource;
+      Clk   : in std_logic;
+      Reset : in std_logic;
+      -- DUT signals
+      Valid         : out std_logic := '0';
+      Data          : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+      StartOfPacket : out std_logic := '0';
+      EndOfPacket   : out std_logic := '0';
+      Empty         : out std_logic := '0';
+      --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
+      Ready : in std_logic;
+
+      -- testbench record
+      TransRec : inout StreamRecType);
+  end component AvalonStreamTransmitter;
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
@@ -80,8 +85,6 @@ package AvalonStreamComponentPkg is
     signal Valid                     : out std_logic;
     signal Ready                     : in std_logic;
     signal StartOfNewStream          : in integer;
-    constant TransmitRequestCount    : in integer;
-    constant TransmitDoneCount       : in integer;
     constant ReadyLatency            : in integer;
     constant ReadyAllowance          : in integer;
     signal ReadyAllowanceCyclesCount : inout integer;
@@ -114,17 +117,29 @@ package AvalonStreamComponentPkg is
     signal Ready            : inout std_logic;
     signal StartOfPacket    : in std_logic;
     signal EndOfPacket      : in std_logic;
-    
-    signal PacketReceivedCount : inout integer;
     signal Data             : in std_logic_vector;
-    signal TransRec             : inout StreamRecType;
-    signal WordsInPacket : inout integer;
+    signal TransRec         : inout StreamRecType;
+    signal WordsInPacket    : inout integer;
     constant ByteOrder      : in boolean;
     constant SymbolWidth    : in integer;
     constant tpd_Clk_Ready  : in time;
     constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string         := "";
     constant TimeOutPeriod  : in time           := - 1 sec
+  );
+
+  procedure WaitForReady (
+  signal Clk         : in std_logic;
+  signal Ready       : in std_logic;
+  constant TimeOut   : in time;
+  constant AlertLogID: in AlertLogIDType;
+  constant Msg       : in string
+);
+
+  procedure ReverseSymbolOrder (
+    variable Data      : inout std_logic_vector;
+    constant SymbolWidth : in integer;
+    constant TotalWidth  : in integer
   );
 
 end package AvalonStreamComponentPkg;
@@ -134,93 +149,57 @@ end package AvalonStreamComponentPkg;
 
 package body AvalonStreamComponentPkg is
 
-  ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
-    ------------------------------------------------------------
     signal Clk                       : in std_logic;
     signal Valid                     : out std_logic;
     signal Ready                     : in std_logic;
     signal StartOfNewStream          : in integer;
-    constant TransmitRequestCount    : in integer;
-    constant TransmitDoneCount       : in integer;
     constant ReadyLatency            : in integer;
     constant ReadyAllowance          : in integer;
     signal ReadyAllowanceCyclesCount : inout integer;
     constant tpd_Clk_Valid           : in time;
     constant AlertLogID              : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage          : in string         := "";
-    constant TimeOutPeriod           : in time           := - 1 sec
+    constant TimeOutMessage          : in string := "";
+    constant TimeOutPeriod           : in time := -1 sec
   ) is
   begin
-    if (Ready = '1') then -- do normal send
+    if Ready = '1' then
       Valid <= '1' after tpd_Clk_Valid;
-    else
-      if StartOfNewStream = 1 and ReadyLatency > 0 then
-        ReadyAllowanceCyclesCount <= ReadyAllowance;
-        wait for 0 ns;
-        -- Warte auf Ready innerhalb des TimeOuts
-        if TimeOutPeriod > 0 sec then
-          wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
-        else
-          wait on Clk until Clk = '1' and Ready = '1';
-        end if;
-
-        -- Falls Ready nicht gesetzt wurde, Fehler melden
-        if Ready /= '1' then
-          Alert(
-          AlertLogID,
-          TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
-          FAILURE
-          );
-          wait until Clk = '1';
-        end if;
-        for i in 1 to ReadyLatency loop -- wait for ready_cycles if configured!
+  
+    elsif StartOfNewStream = 1 then
+      ReadyAllowanceCyclesCount <= ReadyAllowance;
+  
+      if ReadyLatency > 0 then
+        WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+        for i in 1 to ReadyLatency loop
           wait until Clk = '1';
         end loop;
-
-        Valid <= '1' after tpd_Clk_Valid;
-
-        -----------------------
-      elsif StartOfNewStream = 1 and ReadyLatency = 0 and ReadyAllowance = 0 then
-        ReadyAllowanceCyclesCount <= ReadyAllowance;
-        Valid                     <= '1' after tpd_Clk_Valid;
-      elsif StartOfNewStream = 0 and ReadyAllowance > ReadyLatency then
-        if (Ready = '0' and ReadyAllowanceCyclesCount > 0) then
+      end if;
+  
+      Valid <= '1' after tpd_Clk_Valid;
+  
+    elsif StartOfNewStream = 0 then
+      if ReadyAllowance > ReadyLatency then
+        if Ready = '0' and ReadyAllowanceCyclesCount > 0 then
           ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
-          Valid                     <= '1' after tpd_Clk_Valid;
-        elsif Ready = '0' and ReadyAllowanceCyclesCount = 0 then
+          Valid <= '1' after tpd_Clk_Valid;
+        elsif Ready = '0' then
           Valid <= '0' after tpd_Clk_Valid;
         else
           Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
         end if;
-
-      elsif StartOfNewStream = 0 and ReadyAllowance = ReadyLatency then
+  
+      elsif ReadyAllowance = ReadyLatency then
         Valid <= '1' after tpd_Clk_Valid;
-
-        -- Either ready allowance is set, or we have to stop the transmission immediately (backpressure)
-        if (Ready /= '1') then
-          -- Warte auf Ready innerhalb des TimeOuts
-          if TimeOutPeriod > 0 sec then
-            wait on Clk until Clk = '1' and Ready = '1' for TimeOutPeriod;
-            -- Falls Ready nicht gesetzt wurde, Fehler melden
-            if Ready /= '1' then
-              Alert(
-              AlertLogID,
-              TimeOutMessage & ".  Ready: " & to_string(Ready) & "  Expected: 1",
-              FAILURE
-              );
-              wait until Clk = '1';
-            end if;
-          else
-            wait on Clk until Clk = '1' and Ready = '1';
-          end if;
-          Valid <= '0'; -- todo ready allowance ist noch ignoriert
+        if Ready /= '1' then
+          WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+          Valid <= '0'; -- ggf. je nach Verhalten überdenken
         end if;
       end if;
     end if;
-
-    wait on Clk until Clk = '1';
-  end procedure DoAvalonStreamValidHandshake;
+  
+    wait until Clk = '1';
+  end procedure;
 
   ------------------------------------------------------------
   procedure DoAvalonStreamReadyHandshake (
@@ -242,14 +221,11 @@ package body AvalonStreamComponentPkg is
 
     if ReadyBeforeValid then
       Ready <= transport '1' after ReadyDelayCycles + tpd_Clk_Ready;
-      Log(AlertLogID, "Setting Ready to 1");
     else
       Ready <= transport '0' after ReadyDelayCycles + tpd_Clk_Ready;
-      Log(AlertLogID, "Setting Ready to 0");
     end if;
     if (ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
       Ready <= '0' after tpd_Clk_Ready;
-      Log(AlertLogID, "Setting Ready to 0 due to ReadyAllowance");
     end if;
 
     -- Wait to Receive Transaction
@@ -261,7 +237,6 @@ package body AvalonStreamComponentPkg is
 
     if Valid = '1' then
       if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then -- skips the check
-        Log(AlertLogID, "waiting for the last words");
         AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
       else
         if not ReadyBeforeValid then
@@ -284,18 +259,19 @@ package body AvalonStreamComponentPkg is
       FAILURE
       );
     end if;
-    -- end if;
   end procedure DoAvalonStreamReadyHandshake;
+
+  ------------------------------------------------------------
+
   procedure DoAvalonStreamPacketReadyHandshake (
     signal Clk              : in std_logic;
     signal Valid            : in std_logic;
     signal Ready            : inout std_logic;
     signal StartOfPacket    : in std_logic;
     signal EndOfPacket      : in std_logic;
-    signal PacketReceivedCount : inout integer;
     signal Data             : in std_logic_vector;
-    signal TransRec             : inout StreamRecType;
-    signal WordsInPacket : inout integer;
+    signal TransRec         : inout StreamRecType;
+    signal WordsInPacket    : inout integer;
     constant ByteOrder      : in boolean;
     constant SymbolWidth    : in integer;
     constant tpd_Clk_Ready  : in time;
@@ -303,11 +279,8 @@ package body AvalonStreamComponentPkg is
     constant TimeOutMessage : in string         := "";
     constant TimeOutPeriod  : in time           := - 1 sec
   ) is
-    variable vData, vDataReverse : std_logic_vector(Data'range);
-    variable vSymbolCount        : integer := 0;
+    variable vData : std_logic_vector(Data'range);
   begin
-
-    -- Warten auf StartOfPacket
     WordsInPacket <= 0;
     loop
       Ready <= '1' after tpd_Clk_Ready;
@@ -317,29 +290,20 @@ package body AvalonStreamComponentPkg is
       else
         wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
       end if;
-      LOG(AlertLogID,"start of packet", INFO, TRUE);
+      -- start of packet
       vData := Data;
-        if ByteOrder then
-          vSymbolCount := Data'length / SymbolWidth;
-          for i in 0 to vSymbolCount - 1 loop
-            vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
-            Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
-          end loop;
-          push(TransRec.BurstFifo, vDataReverse);
-          Log(AlertLogID, "PacketTransfer: Received Reversed Word: " & to_hxstring(vDataReverse), ALWAYS);
-        else
-          push(TransRec.BurstFifo, vData);
-          Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), ALWAYS);
-        end if;
-        WordsInPacket <= WordsInPacket + 1;
+      if ByteOrder then
+        ReverseSymbolOrder(vData, SymbolWidth, Data'length);
+      end if;
+      push(TransRec.BurstFifo, vData);
+      Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
+      WordsInPacket <= WordsInPacket + 1;
       exit when Valid = '1' and StartOfPacket = '1';
     end loop;
     loop
-      LOG(AlertLogID,"now in packet", INFO, TRUE);
-      -- Immer direkt Ready setzen
+      -- in packet
       Ready <= '1' after tpd_Clk_Ready;
 
-      -- Auf gültige Daten warten
       if TimeOutPeriod > 0 sec then
         wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
       else
@@ -347,30 +311,57 @@ package body AvalonStreamComponentPkg is
       end if;
 
       if Valid = '1' then
-        -- Daten übernehmen
         vData := Data;
         if ByteOrder then
-          vSymbolCount := Data'length / SymbolWidth;
-          for i in 0 to vSymbolCount - 1 loop
-            vDataReverse((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth) :=
-            Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
-          end loop;
-          push(TransRec.BurstFifo, vDataReverse);
-          Log(AlertLogID, "PacketTransfer: Received Reversed Word: " & to_hxstring(vDataReverse), ALWAYS);
-        else
-          push(TransRec.BurstFifo, vData);
-          Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), ALWAYS);
+          ReverseSymbolOrder(vData, SymbolWidth, Data'length);
         end if;
+        push(TransRec.BurstFifo, vData);
+        Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
         WordsInPacket <= WordsInPacket + 1;
         wait for 0 ns;
-        -- Wenn EndOfPacket = 1, abbrechen
         exit when EndOfPacket = '1';
       else
         Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
       end if;
     end loop;
     Ready <= '0' after tpd_Clk_Ready;
-    PacketReceivedCount <= PacketReceivedCount + 1;
-    LOG(AlertLogID,"packet received", INFO, TRUE);
+    -- packet received
+    wait for 0 ns;
+  end procedure;
+  -------------------------------------------------------------
+  procedure WaitForReady (
+    signal Clk         : in std_logic;
+    signal Ready       : in std_logic;
+    constant TimeOut   : in time;
+    constant AlertLogID: in AlertLogIDType;
+    constant Msg       : in string
+  ) is
+  begin
+    if TimeOut > 0 sec then
+      wait on Clk until Clk = '1' and Ready = '1' for TimeOut;
+      if Ready /= '1' then
+        Alert(AlertLogID, Msg & ".  Ready: " & to_string(Ready) & "  Expected: 1", FAILURE);
+        wait until Clk = '1';
+      end if;
+    else
+      wait on Clk until Clk = '1' and Ready = '1';
+    end if;
+  end procedure;
+
+  -------------------------------------------------------------
+  procedure ReverseSymbolOrder (
+    variable Data        : inout std_logic_vector;
+    constant SymbolWidth : in integer;
+    constant TotalWidth  : in integer
+  ) is
+    variable SymbolCount   : integer;
+    variable vDataReversed : std_logic_vector(Data'range);
+  begin
+    SymbolCount := TotalWidth / SymbolWidth;
+    for i in 0 to SymbolCount - 1 loop
+      vDataReversed((SymbolCount - i) * SymbolWidth - 1 downto (SymbolCount - i - 1) * SymbolWidth) :=
+      Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
+    end loop;
+    Data := vDataReversed;
   end procedure;
 end package body AvalonStreamComponentPkg;

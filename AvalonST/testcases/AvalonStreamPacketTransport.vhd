@@ -17,7 +17,7 @@ begin
   begin
     SetTestName("AvalonStreamPacketTransport");
     SetLogEnable(PASSED, TRUE);
-    SetLogEnable(INFO, TRUE);
+    SetLogEnable(INFO, FALSE);
 
     wait for 0 ns;
     wait for 0 ns;
@@ -95,8 +95,9 @@ begin
 
     ReceivePacket(StreamRxRec);
    wait for 150 ns;
-   GetPacket(StreamRxRec, PacketLength);
-   Log("PacketLength: " & to_string(PacketLength), INFO, TRUE);
+  
+  -- packet can also be checked this way:
+  -- GetPacket(StreamRxRec, PacketLength);
   --  for i in 0 to PacketLength - 1 loop
   --   PacketWord := pop(RxPacketFifo);
   --   Log("PacketWord: " & to_string(PacketWord), INFO, TRUE);

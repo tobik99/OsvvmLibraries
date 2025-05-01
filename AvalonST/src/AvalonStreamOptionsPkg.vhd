@@ -12,9 +12,8 @@ library OSVVM_Common;
 context OSVVM_Common.OsvvmCommonContext;
 
 package AvalonStreamOptionsPkg is
-  type AvalonStreamOptionsType is (-- OptVal
+  type AvalonStreamOptionsType is (
     READY_ALLOWANCE,       -- Integer
-    TRANSACTION_FIFO_SIZE, -- Integer
     BEATS_PER_CYCLE,       -- Integer
     SYMBOL_WIDTH,          -- Integer
     BYTE_ORDER,            -- Boolean
