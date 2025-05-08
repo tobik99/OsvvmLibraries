@@ -17,7 +17,7 @@ begin
   begin
     SetTestName("AvalonStreamPacketTransport");
     SetLogEnable(PASSED, TRUE);
-    SetLogEnable(INFO, FALSE);
+    SetLogEnable(INFO, TRUE);
 
     wait for 0 ns;
     wait for 0 ns;
@@ -54,6 +54,7 @@ begin
     wait until Reset = '1';
     wait for 0 ns;
     SetAvalonStreamOptions(StreamTxRec, PACKET_TRANSFER, TRUE);
+    SetAvalonStreamOptions(StreamTxRec, PACKET_LAST_WORD_EMPTY, 1); -- use the empty signal for the last word in packet
     wait for 10 ns;
     for i in ExpData'range loop
       push(TxPacketFifo, ExpData(i));
@@ -71,7 +72,7 @@ begin
   ------------------------------------------------------------
   receiver_proc : process
     variable Available : boolean := false;
-    variable PacketLength : integer := 0;
+    variable PacketLength, LastWordEmpty : integer := 0;
     variable PacketWord : std_logic_vector(31 downto 0);
     variable ExpData : slv_array_t(0 to 9)(31 downto 0) := (
       "00000000000000000000000000000001", -- 1
@@ -104,6 +105,8 @@ begin
   --   AffirmIf(PacketWord = ExpData(i), "Data: " & to_string(PacketWord) & " /= Expected: " & to_string(ExpData(i)));
   --  end loop;
     CheckPacket(StreamRxRec, ExpData);
+    GetAvalonStreamOptions(StreamRxRec, PACKET_LAST_WORD_EMPTY, LastWordEmpty);
+    AffirmIf(LastWordEmpty = 1, "LastWordEmpty is correctly set to 1");
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

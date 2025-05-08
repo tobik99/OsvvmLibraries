@@ -12,6 +12,8 @@ architecture bhv of AvalonStreamTestHarness is
 
   constant tperiod_Clk : time := 10 ns;
   constant tpd         : time := 2 ns;
+  constant AvalonStreamDataWidth : integer := 32;
+  constant AvalonStreamSymbolWidth : integer := 16;
 
   signal Clk   : std_logic := '1';
   signal Reset : std_logic := '0';
@@ -21,13 +23,13 @@ architecture bhv of AvalonStreamTestHarness is
   signal Valid         : std_logic;
   signal StartOfPacket : std_logic;
   signal EndOfPacket   : std_logic;
-  signal Empty         : std_logic;
+  signal Empty         : std_logic_vector(AvalonStreamDataWidth/AvalonStreamSymbolWidth - 1 downto 0);
 
   signal StreamRxRec, StreamTxRec : StreamRecType(
-  DataToModel (32 - 1 downto 0),
-  DataFromModel (32 - 1 downto 0),
-  ParamToModel (32 - 1 downto 0),
-  ParamFromModel(32 - 1 downto 0)
+  DataToModel (AvalonStreamDataWidth - 1 downto 0),
+  DataFromModel (AvalonStreamDataWidth - 1 downto 0),
+  ParamToModel (AvalonStreamDataWidth - 1 downto 0),
+  ParamFromModel(AvalonStreamDataWidth - 1 downto 0)
   );
   component AvalonST_TestCtrl is
     port (
@@ -60,7 +62,8 @@ begin
   AvalonStreamTransmitter_VC : entity osvvm_avalonst.AvalonStreamTransmitter(bhv)
     generic map(
       MODEL_ID_NAME            => "AvalonStreamTransmitter",
-      AVALON_STREAM_DATA_WIDTH => 32,
+      AVALON_STREAM_DATA_WIDTH => AvalonStreamDataWidth,
+      AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
       DEFAULT_DELAY            => 1 ns,
       tpd_Clk_Valid            => 1 ns,
       tpd_Clk_Data            => 1 ns
@@ -80,8 +83,8 @@ begin
   AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver(bhv)
     generic map(
       MODEL_ID_NAME               => "AvalonSreamReceiver",
-      AVALON_STREAM_DATA_WIDTH    => 32,
-      AVALON_STREAM_READY_LATENCY => 0,
+      AVALON_STREAM_DATA_WIDTH => AvalonStreamDataWidth,
+      AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
       DEFAULT_DELAY               => 1 ns,
       tpd_Clk_oReady              => 1 ns
     )

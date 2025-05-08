@@ -2,6 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use ieee.numeric_std_unsigned.all;
+use ieee.math_real.all;
 library osvvm;
 context osvvm.OsvvmContext;
 
@@ -11,15 +12,17 @@ library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
 entity AvalonStreamTransmitter is
   generic (
-    MODEL_ID_NAME            : string                  := "";
-    AVALON_STREAM_DATA_WIDTH : integer range 1 to 8192 := 32;
-
-    DEFAULT_DELAY         : time := 1 ns;
-    tpd_Clk_Data          : time := DEFAULT_DELAY;
-    tpd_Clk_Valid         : time := DEFAULT_DELAY;
-    tpd_Clk_StartOfPacket : time := DEFAULT_DELAY;
-    tpd_Clk_EndOfPacket   : time := DEFAULT_DELAY;
-    tpd_Clk_Empty         : time := DEFAULT_DELAY;
+    MODEL_ID_NAME              : string                                      := "";
+    AVALON_STREAM_DATA_WIDTH   : integer range 1 to 8192                     := 32;
+    AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 16;
+    AVALON_STREAM_CHANNELS     : integer range 1 to 128                      := 1;
+    AVALON_STREAM_ERROR        : integer range 1 to 256                      := 1;
+    DEFAULT_DELAY              : time                                        := 1 ns;
+    tpd_Clk_Data               : time                                        := DEFAULT_DELAY;
+    tpd_Clk_Valid              : time                                        := DEFAULT_DELAY;
+    tpd_Clk_StartOfPacket      : time                                        := DEFAULT_DELAY;
+    tpd_Clk_EndOfPacket        : time                                        := DEFAULT_DELAY;
+    tpd_Clk_Empty              : time                                        := DEFAULT_DELAY;
     --DEFAULT_CHANNELS   : integer := 1
     tperiod_Clk : time := 10 ns --todo: could be deleted
   );
@@ -29,10 +32,10 @@ entity AvalonStreamTransmitter is
     -- DUT signals
     Valid         : out std_logic := '0';
     Data          : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    StartOfPacket : out std_logic := '0';
-    EndOfPacket   : out std_logic := '0';
-    Empty         : out std_logic := '0';
-    --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
+    StartOfPacket : out std_logic                                                                            := '0';
+    EndOfPacket   : out std_logic                                                                            := '0';
+    Empty         : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
+
     Ready : in std_logic;
 
     -- testbench record
@@ -58,9 +61,9 @@ architecture bhv of AvalonStreamTransmitter is
   signal ReadyLatency                                    : integer := 0;
   signal ReadyAllowance                                  : integer := 0;
   signal ByteOrder                                       : boolean := false; -- big endian is default
-  signal SymbolWidth                                     : natural := 8;     -- default is 8 bits
   signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
   signal PacketTransfer                                  : boolean := false;
+  signal PacketLastWordEmpty                             : integer := 0;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -75,15 +78,17 @@ begin
     --    DataCheckID      <= NewID("Data Check", ID ) ;
     --BusFailedID  <= NewID("No response", ID);
     TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
+
+    AlertIf(ModelID, AVALON_STREAM_DATA_WIDTH mod AVALON_STREAM_SYMBOL_WIDTH /= 0,
+    "AvalonStreamTransmitter: AVALON_STREAM_DATA_WIDTH must be a multiple of AVALON_STREAM_SYMBOL_WIDTH", FAILURE);
     wait;
   end process Initialize;
 
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData, vDataReverse        : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    variable vSymbolWidth, vSymbolCount : integer := 0;
-    variable NumberTransfers            : integer;
+    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vSymbolCount        : integer := 0;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
     TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME);
@@ -98,10 +103,10 @@ begin
         when SEND | SEND_ASYNC =>
           vData := SafeResize(ModelID, TransRec.DataToModel, vData'length);
           if (ByteOrder = true) then
-            vSymbolCount := AVALON_STREAM_DATA_WIDTH / SymbolWidth;
+            vSymbolCount := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
             for i in 0 to vSymbolCount - 1 loop
-              vDataReverse((i + 1) * SymbolWidth - 1 downto i * SymbolWidth) :=
-              vData((vSymbolCount - i) * SymbolWidth - 1 downto (vSymbolCount - i - 1) * SymbolWidth);
+              vDataReverse((i + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto i * AVALON_STREAM_SYMBOL_WIDTH) :=
+              vData((vSymbolCount - i) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto (vSymbolCount - i - 1) * AVALON_STREAM_SYMBOL_WIDTH);
             end loop;
             Push(TransmitFifo, vDataReverse);
           else
@@ -157,15 +162,12 @@ begin
                 Log(ModelID, "Byte Order set to Big Endian", INFO, TRUE);
               end if;
 
-            when SYMBOL_WIDTH =>
-              vSymbolWidth := TransRec.IntToModel;
-              if ((vSymbolWidth > 0) and (vSymbolWidth <= AVALON_STREAM_DATA_WIDTH) and
-                (unsigned(to_unsigned(vSymbolWidth, AVALON_STREAM_DATA_WIDTH)) and
-                unsigned(to_unsigned(vSymbolWidth - 1, AVALON_STREAM_DATA_WIDTH))) = 0) then
-                SymbolWidth <= vSymbolWidth;
-                Log(ModelID, "SymbolWidth set to " & to_string(vSymbolWidth), INFO, TRUE);
+            when PACKET_LAST_WORD_EMPTY =>
+              if TransRec.IntToModel <= AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH then
+                PacketLastWordEmpty    <= TransRec.IntToModel;
               else
-                Alert(ModelID, "SymbolWidth must be a power of 2 and less than or equal to AVALON_STREAM_DATA_WIDTH", FAILURE);
+                Alert(ModelID, "PacketLastWordEmpty must be less than or equal to AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH", WARNING);
+                PacketLastWordEmpty <= AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
               end if;
             when READY_ALLOWANCE =>
               if (TransRec.IntToModel < ReadyLatency) then
@@ -192,8 +194,8 @@ begin
               TransRec.BoolFromModel <= PacketTransfer;
             when BYTE_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
-            when SYMBOL_WIDTH =>
-              TransRec.IntFromModel <= SymbolWidth;
+            when PACKET_LAST_WORD_EMPTY =>
+              TransRec.IntFromModel <= PacketLastWordEmpty;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;
             when READY_LATENCY =>
@@ -217,7 +219,7 @@ begin
     Data          <= (vData'range => 'X');
     StartOfPacket <= '0';
     EndOfPacket   <= '0';
-    Empty         <= '0';
+    Empty         <= (others => '0');
     wait for 0 ns;
 
     TransmitLoop : loop
@@ -234,9 +236,11 @@ begin
           vData := Pop(PacketFifo);
           Data <= vData;
 
-          -- Prüfen ob es das letzte Wort im Paket ist (FIFO ist danach leer)
-          EndOfPacket <= '1' when IsEmpty(PacketFifo) else
+          -- check if is the last word in the packet
+          EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(PacketFifo) else
             '0';
+          Empty <= std_logic_vector(to_unsigned(PacketLastWordEmpty, Empty'length)) after tpd_Clk_Empty when IsEmpty(PacketFifo) else
+            (others => '0');
 
           Log(ModelID,
           "AvalonStream Packet Transmit." &
@@ -259,6 +263,7 @@ begin
           -- Bei EOP fertig
           if EndOfPacket = '1' then
             EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
+            Empty       <= (others => '0') after tpd_Clk_Empty;
             exit;
           end if;
 
@@ -281,8 +286,7 @@ begin
         Data <= vData;
         Log(ModelID,
         "AvalonStream Transmit." &
-        "  Data: " & to_hxstring(vData) &
-        "  Operation# " & to_string (TransmitDoneCount + 1),
+        "  Data: " & to_hxstring(vData),
         DEBUG
         );
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,

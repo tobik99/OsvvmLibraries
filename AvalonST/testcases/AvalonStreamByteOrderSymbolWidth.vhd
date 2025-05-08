@@ -65,7 +65,6 @@ variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
     wait until Reset = '1';
     wait for 0 ns;
    SetAvalonStreamOptions(StreamTxRec, BYTE_ORDER, true);
-    SetAvalonStreamOptions(StreamTxRec, SYMBOL_WIDTH, 16);
     wait for 10 ns;
     --WaitForBarrier(SyncPoint);
     SendAsync(StreamTxRec, ExpData);
@@ -108,7 +107,6 @@ variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
     wait until Reset = '1';
     wait for 0 ns;
     SetAvalonStreamOptions(StreamRxRec, BYTE_ORDER, true);
-    SetAvalonStreamOptions(StreamRxRec, SYMBOL_WIDTH, 16);
     wait for 10 ns;
     --WaitForBarrier(SyncPoint);
 
