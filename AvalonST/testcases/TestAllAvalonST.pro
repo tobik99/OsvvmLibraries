@@ -15,3 +15,4 @@ RunTest AvalonStreamSendGetLatency.vhd
 RunTest AvalonStreamReadyLatencyAllowance.vhd
 RunTest AvalonStreamByteOrderSymbolWidth.vhd
 RunTest AvalonStreamPacketTransport.vhd
+RunTest AvalonStreamBeatsPerCycle.vhd

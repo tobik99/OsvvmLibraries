@@ -14,6 +14,7 @@ entity AvalonStreamTransmitter is
   generic (
     MODEL_ID_NAME              : string                                      := "";
     AVALON_STREAM_DATA_WIDTH   : integer range 1 to 8192                     := 32;
+    AVALON_STREAM_WORD_WIDTH   : integer range 1 to AVALON_STREAM_DATA_WIDTH := 32;
     AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 16;
     AVALON_STREAM_CHANNELS     : integer range 1 to 128                      := 1;
     AVALON_STREAM_ERROR        : integer range 1 to 256                      := 1;
@@ -64,6 +65,8 @@ architecture bhv of AvalonStreamTransmitter is
   signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
   signal PacketTransfer                                  : boolean := false;
   signal PacketLastWordEmpty                             : integer := 0;
+  signal BeatsPerCycle                                   : integer := 1;
+  signal WordWidth                                       : integer := AVALON_STREAM_DATA_WIDTH;
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -87,7 +90,7 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
     variable vSymbolCount        : integer := 0;
   begin
     wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
@@ -116,9 +119,7 @@ begin
           Increment(TransmitRequestCount);
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
-            log("waiting until blocked send completed");
             wait until TransmitRequestCount = TransmitDoneCount;
-            log("async wait completed");
           end if;
         when WAIT_FOR_TRANSACTION =>
           if TransmitRequestCount /= TransmitDoneCount then
@@ -143,7 +144,23 @@ begin
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when BEATS_PER_CYCLE =>
-              -- todo
+              BeatsPerCycle <= TransRec.IntToModel;
+              wait for 0 ns;
+              if (BeatsPerCycle < 1) then
+                Alert(ModelID, "BeatsPerCycle must be greater than or equal to 1", FAILURE);
+              end if;
+              if (BeatsPerCycle > AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH) then
+                Alert(ModelID, "BeatsPerCycle must be less than or equal to AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH", FAILURE);
+              end if;
+            when WORD_WIDTH =>
+              WordWidth <= TransRec.IntToModel;
+              wait for 0 ns;
+              if (WordWidth < 1) then
+                Alert(ModelID, "WordWidth must be greater than or equal to 1", FAILURE);
+              end if;
+              if (WordWidth > AVALON_STREAM_DATA_WIDTH) then
+                Alert(ModelID, "WordWidth must be less than or equal to AVALON_STREAM_DATA_WIDTH", FAILURE);
+              end if;
             when PACKET_TRANSFER =>
               PacketTransfer <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -211,12 +228,13 @@ begin
   end process TransactionDispatcher;
 
   TransmitHandler : process is
-    variable vData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+    variable vEmptyBeats : integer := 0;
 
   begin
     -- initialize outputs
     Valid         <= '0';
-    Data          <= (vData'range => 'X');
+    Data          <= (Data'range => 'X');
     StartOfPacket <= '0';
     EndOfPacket   <= '0';
     Empty         <= (others => '0');
@@ -233,8 +251,19 @@ begin
         wait for 0 ns;
 
         while not IsEmpty(PacketFifo) loop
-          vData := Pop(PacketFifo);
-          Data <= vData;
+          if (BeatsPerCycle > 1) then
+            for i in 0 to (BeatsPerCycle - 1) loop
+              if IsEmpty(PacketFifo) then
+                Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => '0');
+              else
+                vData := Pop(PacketFifo);
+                Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
+              end if;
+            end loop;
+          else
+            vData := Pop(PacketFifo);
+            Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData;
+          end if;
 
           -- check if is the last word in the packet
           EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(PacketFifo) else
@@ -282,8 +311,20 @@ begin
           WaitForToggle(TransmitRequestCount);
         end if;
         -- Get Transaction
-        (vData) := Pop(TransmitFifo);
-        Data <= vData;
+        if (BeatsPerCycle > 1) then
+          for i in 0 to (BeatsPerCycle - 1) loop
+            if IsEmpty(TransmitFifo) then
+              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => '0');
+              vEmptyBeats := vEmptyBeats + 1;
+            else
+              vData := Pop(TransmitFifo);
+              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
+            end if;
+          end loop;
+        else
+          (vData) := Pop(TransmitFifo);
+          Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData;
+        end if;
         Log(ModelID,
         "AvalonStream Transmit." &
         "  Data: " & to_hxstring(vData),
@@ -292,15 +333,16 @@ begin
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
-        if (TransmitDoneCount + 1 >= TransmitRequestCount) then
+        if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream          <= 1;
           Valid                     <= '0' after tpd_Clk_Valid;
-          Data                      <= (vData'range => 'X');
+          Data                      <= (others => 'X');
           ReadyAllowanceCyclesCount <= ReadyAllowance;
         else
           StartOfNewStream <= 0;
         end if;
-        Increment(TransmitDoneCount);
+        TransmitDoneCount <= TransmitDoneCount + BeatsPerCycle - vEmptyBeats;
+        vEmptyBeats := 0;
         wait for 0 ns;
 
         wait for 0 ns;

@@ -19,7 +19,8 @@ package AvalonStreamOptionsPkg is
     BYTE_ORDER,            -- Boolean
     READY_LATENCY,         -- Integer
     PACKET_TRANSFER,        -- Boolean
-    PACKET_LAST_WORD_EMPTY -- Integer
+    PACKET_LAST_WORD_EMPTY, -- Integer
+    WORD_WIDTH           -- Integer
     --DROP_UNDRIVEN,
     --THE_END
   );

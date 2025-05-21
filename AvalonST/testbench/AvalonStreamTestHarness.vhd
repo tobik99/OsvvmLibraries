@@ -12,14 +12,15 @@ architecture bhv of AvalonStreamTestHarness is
 
   constant tperiod_Clk : time := 10 ns;
   constant tpd         : time := 2 ns;
-  constant AvalonStreamDataWidth : integer := 32;
+  constant AvalonStreamDataWidth : integer := 128;
+  constant AvalonStreamWordWidth : integer := 32;
   constant AvalonStreamSymbolWidth : integer := 16;
 
   signal Clk   : std_logic := '1';
   signal Reset : std_logic := '0';
 
   signal Ready         : std_logic;
-  signal Data          : std_logic_vector(31 downto 0);
+  signal Data          : std_logic_vector(AvalonStreamDataWidth - 1 downto 0);
   signal Valid         : std_logic;
   signal StartOfPacket : std_logic;
   signal EndOfPacket   : std_logic;
@@ -64,6 +65,7 @@ begin
       MODEL_ID_NAME            => "AvalonStreamTransmitter",
       AVALON_STREAM_DATA_WIDTH => AvalonStreamDataWidth,
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
+      AVALON_STREAM_WORD_WIDTH => AvalonStreamWordWidth,
       DEFAULT_DELAY            => 1 ns,
       tpd_Clk_Valid            => 1 ns,
       tpd_Clk_Data            => 1 ns
@@ -85,6 +87,7 @@ begin
       MODEL_ID_NAME               => "AvalonSreamReceiver",
       AVALON_STREAM_DATA_WIDTH => AvalonStreamDataWidth,
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
+      AVALON_STREAM_WORD_WIDTH => AvalonStreamWordWidth,
       DEFAULT_DELAY               => 1 ns,
       tpd_Clk_oReady              => 1 ns
     )

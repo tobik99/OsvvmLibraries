@@ -15,6 +15,7 @@ entity AvalonStreamReceiver is
   generic (
     MODEL_ID_NAME              : string                                      := "";
     AVALON_STREAM_DATA_WIDTH   : integer range 1 to 8192                     := 32;
+    AVALON_STREAM_WORD_WIDTH   : integer range 1 to AVALON_STREAM_DATA_WIDTH := 32;
     AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 16;
     AVALON_STREAM_CHANNELS     : integer range 1 to 128                      := 1;
     AVALON_STREAM_ERROR        : integer range 1 to 256                      := 1;
@@ -61,6 +62,8 @@ architecture bhv of AvalonStreamReceiver is
   signal ReadyAllowance : integer := 0;
   signal ByteOrder      : boolean := false; -- big endian is default
   signal PacketTransfer : boolean := false;
+  signal BeatsPerCycle  : integer := 1;
+  signal WordWidth      : integer := AVALON_STREAM_DATA_WIDTH;
 
 begin
   ------------------------------------------------------------
@@ -192,7 +195,23 @@ begin
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when BEATS_PER_CYCLE =>
-              -- todo
+              BeatsPerCycle <= TransRec.IntToModel;
+              wait for 0 ns;
+              if (BeatsPerCycle < 1) then
+                Alert(ModelID, "BeatsPerCycle must be greater than or equal to 1", FAILURE);
+              end if;
+              if (BeatsPerCycle > AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH) then
+                Alert(ModelID, "BeatsPerCycle must be less than or equal to AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH", FAILURE);
+              end if;
+            when WORD_WIDTH =>
+              WordWidth <= TransRec.IntToModel;
+              wait for 0 ns;
+              if (WordWidth < 1) then
+                Alert(ModelID, "WordWidth must be greater than or equal to 1", FAILURE);
+              end if;
+              if (WordWidth > AVALON_STREAM_DATA_WIDTH) then
+                Alert(ModelID, "WordWidth must be less than or equal to AVALON_STREAM_DATA_WIDTH", FAILURE);
+              end if;
             when PACKET_TRANSFER =>
               PacketTransfer <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -227,7 +246,9 @@ begin
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when BEATS_PER_CYCLE =>
-              -- todo
+              TransRec.IntFromModel <= BeatsPerCycle;
+            when WORD_WIDTH =>
+              TransRec.IntFromModel <= WordWidth;
             when PACKET_TRANSFER =>
               TransRec.BoolFromModel <= PacketTransfer;
             when PACKET_LAST_WORD_EMPTY =>
