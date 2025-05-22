@@ -52,8 +52,8 @@ entity AvalonStreamTransmitter is
 end AvalonStreamTransmitter;
 
 architecture bhv of AvalonStreamTransmitter is
-  signal ModelID, BusFailedID                    : AlertLogIDType;
-  signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
+  signal ModelID, BusFailedID : AlertLogIDType;
+  --signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
   signal PacketRequestCount, PacketTransmitCount : integer := 0;
@@ -80,7 +80,7 @@ begin
     --    ProtocolID       <= NewID("Protocol Error", ID ) ;
     --    DataCheckID      <= NewID("Data Check", ID ) ;
     --BusFailedID  <= NewID("No response", ID);
-    TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
+    --TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
 
     AlertIf(ModelID, AVALON_STREAM_DATA_WIDTH mod AVALON_STREAM_SYMBOL_WIDTH /= 0,
     "AvalonStreamTransmitter: AVALON_STREAM_DATA_WIDTH must be a multiple of AVALON_STREAM_SYMBOL_WIDTH", FAILURE);
@@ -93,8 +93,10 @@ begin
     variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
     variable vSymbolCount        : integer := 0;
   begin
-    wait for 0 ns; -- Lassen, damit ModelID gesetzt wird
-    TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME);
+    wait for 0 ns;
+    TransRec.TransmitFifo <= NewID("TxTransmitFifo", ModelID, Search => PRIVATE_NAME);
+    TransRec.BurstFifo    <= NewID("TxPacketFifo", ModelID, Search   => PRIVATE_NAME);
+
     TransactionDispatcherLoop : loop
       WaitForTransaction(
       Clk => Clk,
@@ -104,19 +106,9 @@ begin
 
       case TransRec.Operation is
         when SEND | SEND_ASYNC =>
-          vData := SafeResize(ModelID, TransRec.DataToModel, vData'length);
-          if (ByteOrder = true) then
-            vSymbolCount := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
-            for i in 0 to vSymbolCount - 1 loop
-              vDataReverse((i + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto i * AVALON_STREAM_SYMBOL_WIDTH) :=
-              vData((vSymbolCount - i) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto (vSymbolCount - i - 1) * AVALON_STREAM_SYMBOL_WIDTH);
-            end loop;
-            Push(TransmitFifo, vDataReverse);
-          else
-            Push(TransmitFifo, vData);
-          end if;
-
-          Increment(TransmitRequestCount);
+          Log(ModelID,
+          "AvalonStream Transmit.", ALWAYS);
+          TransmitRequestCount <= TransmitRequestCount + TransRec.IntToModel;
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
             wait until TransmitRequestCount = TransmitDoneCount;
@@ -146,10 +138,10 @@ begin
             when BEATS_PER_CYCLE =>
               BeatsPerCycle <= TransRec.IntToModel;
               wait for 0 ns;
+              Log(ModelID, "BeatsPerCycle = " & integer'image(BeatsPerCycle), INFO);
               if (BeatsPerCycle < 1) then
                 Alert(ModelID, "BeatsPerCycle must be greater than or equal to 1", FAILURE);
-              end if;
-              if (BeatsPerCycle > AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH) then
+              elsif (BeatsPerCycle > AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH) then
                 Alert(ModelID, "BeatsPerCycle must be less than or equal to AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH", FAILURE);
               end if;
             when WORD_WIDTH =>
@@ -206,7 +198,7 @@ begin
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when BEATS_PER_CYCLE =>
-              -- todo
+              TransRec.IntFromModel <= BeatsPerCycle;
             when PACKET_TRANSFER =>
               TransRec.BoolFromModel <= PacketTransfer;
             when BYTE_ORDER =>
@@ -228,8 +220,9 @@ begin
   end process TransactionDispatcher;
 
   TransmitHandler : process is
-    variable vData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-    variable vEmptyBeats : integer := 0;
+    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+    variable vEmptyBeats         : integer := 0;
+    variable vSymbolCount        : integer := 0;
 
   begin
     -- initialize outputs
@@ -239,9 +232,10 @@ begin
     EndOfPacket   <= '0';
     Empty         <= (others => '0');
     wait for 0 ns;
+    wait for 0 ns; -- two delta-cycles to ensure that the scoreboards are initialized
 
     TransmitLoop : loop
-      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransmitFifo) then
+      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransRec.TransmitFifo) then
         wait on TransmitRequestCount, PacketRequestCount;
       end if;
       if PacketTransfer and (PacketRequestCount > PacketTransmitCount) then
@@ -253,15 +247,23 @@ begin
         while not IsEmpty(PacketFifo) loop
           if (BeatsPerCycle > 1) then
             for i in 0 to (BeatsPerCycle - 1) loop
-              if IsEmpty(PacketFifo) then
+              if IsEmpty(TransRec.TransmitFifo) then
                 Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => '0');
+                vEmptyBeats := vEmptyBeats + 1;
               else
-                vData := Pop(PacketFifo);
+                vData := Pop(TransRec.TransmitFifo);
+                if (ByteOrder = true) then
+                  vSymbolCount := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
+                  for j in 0 to vSymbolCount - 1 loop
+                    vDataReverse((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH) :=
+                    vData((vSymbolCount - j) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto (vSymbolCount - j - 1) * AVALON_STREAM_SYMBOL_WIDTH);
+                  end loop;
+                end if;
                 Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
               end if;
             end loop;
           else
-            vData := Pop(PacketFifo);
+            (vData) := Pop(TransRec.TransmitFifo);
             Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData;
           end if;
 
@@ -302,27 +304,34 @@ begin
         Increment(PacketTransmitCount);
         StartOfNewStream <= 1;
         Valid            <= '0' after tpd_Clk_Valid;
-        Data             <= (vData'range => 'X');
+        Data             <= (Data'range => 'X');
         wait for 0 ns;
       else
 
         -- Find Transaction
-        if IsEmpty(TransmitFifo) and not PacketTransfer then
+        if IsEmpty(TransRec.TransmitFifo) and not PacketTransfer then
           WaitForToggle(TransmitRequestCount);
         end if;
         -- Get Transaction
         if (BeatsPerCycle > 1) then
           for i in 0 to (BeatsPerCycle - 1) loop
-            if IsEmpty(TransmitFifo) then
+            if IsEmpty(TransRec.TransmitFifo) then
               Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => '0');
               vEmptyBeats := vEmptyBeats + 1;
             else
-              vData := Pop(TransmitFifo);
+              vData := Pop(TransRec.TransmitFifo);
+              if (ByteOrder = true) then
+                vSymbolCount := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
+                for j in 0 to vSymbolCount - 1 loop
+                  vDataReverse((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH) :=
+                  vData((vSymbolCount - j) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto (vSymbolCount - j - 1) * AVALON_STREAM_SYMBOL_WIDTH);
+                end loop;
+              end if;
               Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
             end if;
           end loop;
         else
-          (vData) := Pop(TransmitFifo);
+          (vData) := Pop(TransRec.TransmitFifo);
           Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData;
         end if;
         Log(ModelID,

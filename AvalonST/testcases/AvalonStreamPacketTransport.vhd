@@ -8,6 +8,19 @@ architecture PacketTransport of AvalonST_TestCtrl is
   signal SyncPoint : integer_barrier := 1;
   signal RxData    : std_logic_vector(31 downto 0);
   signal TxOptions : AvalonStreamOptionsType;
+
+    signal ExpData : slv_array_t(0 to 9)(31 downto 0) := (
+    "00000000000000000000000000000001", -- 1
+    "00000000000000000000000000000010", -- 2
+    "00000000000000000000000000000011", -- 3
+    "00000000000000000000000000000100", -- 4
+    "00000000000000000000000000000101", -- 5
+    "00000000000000000000000000000110", -- 6
+    "00000000000000000000000000000111", -- 7
+    "00000000000000000000000000001000", -- 8
+    "00000000000000000000000000001001", -- 9
+    "00000000000000000000000000001010"  -- 10
+);
 begin
 
   ------------------------------------------------------------
@@ -38,28 +51,15 @@ begin
   -- Transmitter Process
   ------------------------------------------------------------
   transmitter_proc : process
-  variable ExpData : slv_array_t(0 to 9)(31 downto 0) := (
-    "00000000000000000000000000000001", -- 1
-    "00000000000000000000000000000010", -- 2
-    "00000000000000000000000000000011", -- 3
-    "00000000000000000000000000000100", -- 4
-    "00000000000000000000000000000101", -- 5
-    "00000000000000000000000000000110", -- 6
-    "00000000000000000000000000000111", -- 7
-    "00000000000000000000000000001000", -- 8
-    "00000000000000000000000000001001", -- 9
-    "00000000000000000000000000001010"  -- 10
-);
+
   begin
     wait until Reset = '1';
     wait for 0 ns;
     SetAvalonStreamOptions(StreamTxRec, PACKET_TRANSFER, TRUE);
     SetAvalonStreamOptions(StreamTxRec, PACKET_LAST_WORD_EMPTY, 1); -- use the empty signal for the last word in packet
     wait for 10 ns;
-    for i in ExpData'range loop
-      push(TxPacketFifo, ExpData(i));
-    end loop;
-    SendPacket(StreamTxRec, ExpData'length);
+   
+    SendPacket(StreamTxRec, ExpData, ExpData'length);
 
     wait for 150 ns;
     --WaitForTransaction(StreamTxRec);
@@ -74,18 +74,7 @@ begin
     variable Available : boolean := false;
     variable PacketLength, LastWordEmpty : integer := 0;
     variable PacketWord : std_logic_vector(31 downto 0);
-    variable ExpData : slv_array_t(0 to 9)(31 downto 0) := (
-      "00000000000000000000000000000001", -- 1
-      "00000000000000000000000000000010", -- 2
-      "00000000000000000000000000000011", -- 3
-      "00000000000000000000000000000100", -- 4
-      "00000000000000000000000000000101", -- 5
-      "00000000000000000000000000000110", -- 6
-      "00000000000000000000000000000111", -- 7
-      "00000000000000000000000000001000", -- 8
-      "00000000000000000000000000001001", -- 9
-      "00000000000000000000000000001010"  -- 10
-  );
+ 
     
   begin
     wait until Reset = '1';
