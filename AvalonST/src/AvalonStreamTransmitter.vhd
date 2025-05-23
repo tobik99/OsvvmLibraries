@@ -220,9 +220,9 @@ begin
   end process TransactionDispatcher;
 
   TransmitHandler : process is
-    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-    variable vEmptyBeats         : integer := 0;
-    variable vSymbolCount        : integer := 0;
+    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0) := (Data'range => 'X');
+    variable vEmptyBeats         : integer                                                 := 0;
+    variable vSymbolCount        : integer                                                 := 0;
 
   begin
     -- initialize outputs
@@ -248,17 +248,10 @@ begin
           if (BeatsPerCycle > 1) then
             for i in 0 to (BeatsPerCycle - 1) loop
               if IsEmpty(TransRec.TransmitFifo) then
-                Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => '0');
+                Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => 'X');
                 vEmptyBeats := vEmptyBeats + 1;
               else
                 vData := Pop(TransRec.TransmitFifo);
-                if (ByteOrder = true) then
-                  vSymbolCount := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
-                  for j in 0 to vSymbolCount - 1 loop
-                    vDataReverse((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH) :=
-                    vData((vSymbolCount - j) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto (vSymbolCount - j - 1) * AVALON_STREAM_SYMBOL_WIDTH);
-                  end loop;
-                end if;
                 Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
               end if;
             end loop;
@@ -313,32 +306,38 @@ begin
           WaitForToggle(TransmitRequestCount);
         end if;
         -- Get Transaction
+        -- Data preparation
         if (BeatsPerCycle > 1) then
           for i in 0 to (BeatsPerCycle - 1) loop
             if IsEmpty(TransRec.TransmitFifo) then
-              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => '0');
+              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => 'X');
               vEmptyBeats := vEmptyBeats + 1;
             else
-              vData := Pop(TransRec.TransmitFifo);
+              vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := Pop(TransRec.TransmitFifo);
               if (ByteOrder = true) then
-                vSymbolCount := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
-                for j in 0 to vSymbolCount - 1 loop
-                  vDataReverse((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH) :=
-                  vData((vSymbolCount - j) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto (vSymbolCount - j - 1) * AVALON_STREAM_SYMBOL_WIDTH);
-                end loop;
+                ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
               end if;
-              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
+              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i);
             end if;
           end loop;
+          Log(ModelID,
+          "AvalonStream Transmit." &
+          "  Data: " & to_hxstring(vData(AVALON_STREAM_DATA_WIDTH - 1 downto 0)), INFO
+          );
         else
-          (vData) := Pop(TransRec.TransmitFifo);
-          Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData;
+          vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := Pop(TransRec.TransmitFifo);
+          if (ByteOrder = true) then
+            ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
+          end if;
+          Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+          Log(ModelID,
+          "AvalonStream Transmit." &
+          "  Data: " & to_hxstring(vData), INFO
+          );
         end if;
-        Log(ModelID,
-        "AvalonStream Transmit." &
-        "  Data: " & to_hxstring(vData),
-        DEBUG
-        );
+        vData := (others => 'X');
+        vDataReverse := (others => 'X');
+
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);

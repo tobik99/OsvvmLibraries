@@ -355,7 +355,7 @@ package body AvalonStreamComponentPkg is
     constant TotalWidth  : in integer
   ) is
     variable SymbolCount   : integer;
-    variable vDataReversed : std_logic_vector(Data'range);
+    variable vDataReversed : std_logic_vector(Data'range) := (others => 'X');
   begin
     SymbolCount := TotalWidth / SymbolWidth;
     for i in 0 to SymbolCount - 1 loop

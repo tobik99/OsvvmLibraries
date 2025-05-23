@@ -50,7 +50,6 @@ end AvalonStreamReceiver;
 architecture bhv of AvalonStreamReceiver is
   signal ModelID                                : AlertLogIDType;
   signal DataCheckID                            : AlertLogIDType;
-  signal WordFifo                               : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal WordRequestCount, WordReceiveCount     : integer := 0;
   signal PacketRequestCount, PacketReceiveCount : integer := 0;
   signal PacketWordLength                       : integer := 0;
@@ -76,7 +75,6 @@ begin
     ID := NewID(MODEL_INSTANCE_NAME);
     ModelID     <= ID;
     DataCheckID <= NewID("Data Check", ID);
-    WordFifo    <= NewID("WordFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
     wait;
   end process Initialize;
 
@@ -86,10 +84,12 @@ begin
     alias Operation                 : StreamOperationType is TransRec.Operation;
     variable DispatcherReceiveCount : integer := 0;
     variable TryWordWaiting         : boolean;
-    variable vData, ExpectedData    : std_logic_vector(Data'range);
+    variable vData    : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable ExpectedData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
   begin
     wait for 0 ns;
-    TransRec.BurstFifo <= NewID("PacketFifo", ModelID, Search => PRIVATE_NAME);
+    TransRec.BurstFifo    <= NewID("RxPacketFifo", ModelID, Search   => PRIVATE_NAME);
+    TransRec.TransmitFifo <= NewID("RxTransmitFifo", ModelID, Search => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
@@ -100,7 +100,7 @@ begin
 
       case Operation is
         when GET | TRY_GET =>
-          if IsEmpty(WordFifo) and IsTry(Operation) then
+          if IsEmpty(TransRec.TransmitFifo) and IsTry(Operation) then
             if not TryWordWaiting then
               increment(WordRequestCount);
             end if;
@@ -119,17 +119,17 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-            if IsEmpty(WordFifo) then
+            if IsEmpty(TransRec.TransmitFifo) then
               -- Wait for data
               WaitForToggle(WordReceiveCount);
             end if;
 
-            (vData) := pop(WordFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+            (vData) := pop(TransRec.TransmitFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
             TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
 
             if IsCheck(Operation) then
-              ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
+              ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
               AffirmIf(DataCheckID,
               (MetaMatch(vData, ExpectedData)),
               " Received.  Data: " & to_hxstring(vData),
@@ -145,18 +145,18 @@ begin
             end if;
           end if;
         when CHECK | TRY_CHECK =>
-          if IsEmpty(WordFifo) then
+          if IsEmpty(TransRec.TransmitFifo) then
             Alert(ModelID, "Can not check any data due to the Receive FIFO being empty!", FAILURE);
           end if;
-          (vData) := pop(WordFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+          vData(AVALON_STREAM_WORD_WIDTH -1 downto 0) := pop(TransRec.TransmitFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
 
           TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
 
           if IsCheck(Operation) then
-            ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
+            ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
             AffirmIf(DataCheckID,
-            (MetaMatch(vData, ExpectedData)),
-            " Received.  Data: " & to_hxstring(vData),
+            (MetaMatch(vData(AVALON_STREAM_WORD_WIDTH -1 downto 0), ExpectedData)),
+            " Received.  Data: " & to_hxstring(vData(AVALON_STREAM_WORD_WIDTH -1 downto 0)),
             " Expected.  Data: " & to_hxstring(ExpectedData),
             TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
             );
@@ -275,10 +275,13 @@ begin
     variable vData            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable ReadyBeforeValid : integer := 1;
     variable ReadyDelayCycles : integer := 0;
+    variable Word             : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+    variable Offset           : integer;
   begin
     -- Initialize
     Ready <= '0';
     wait for 0 ns;
+    wait for 0 ns; -- ensure that the scoreboards are initialized.
 
     --WaitForBarrier(OsvvmVcInit);
     ReceiveLoop : loop
@@ -324,11 +327,17 @@ begin
         tpd_Clk_Ready    => tpd_Clk_oReady,
         AlertLogID       => ModelID
         );
+
         vData := Data;
         if (ByteOrder = true) then
-          ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
+          ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
         end if;
-        push(WordFifo, vData);
+        for i in 0 to BeatsPerCycle - 1 loop
+          push(
+          TransRec.TransmitFifo,
+          vData((i + 1) * AVALON_STREAM_WORD_WIDTH - 1 downto i * AVALON_STREAM_WORD_WIDTH)
+          );
+        end loop;
         Log(ModelID, "WordTransfer: Received Word: " & to_hxstring(vData), INFO);
         if (WordReceiveCount + 1 = WordRequestCount) then
           StartOfNewStream <= 1;
@@ -339,7 +348,7 @@ begin
           end if;
           StartOfNewStream <= 0;
         end if;
-        increment(WordReceiveCount);
+        WordReceiveCount <= WordReceiveCount + BeatsPerCycle;
         wait for 0 ns;
       else
         Alert(ModelID, "AvalonStreamReceiver: No Word or Packet request was received!", FAILURE);
