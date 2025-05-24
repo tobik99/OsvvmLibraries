@@ -120,7 +120,9 @@ package AvalonStreamComponentPkg is
     signal Data             : in std_logic_vector;
     signal TransRec         : inout StreamRecType;
     signal WordsInPacket    : inout integer;
+    constant BeatsPerCycle  : in integer;
     constant ByteOrder      : in boolean;
+    constant WordWidth      : in integer;
     constant SymbolWidth    : in integer;
     constant tpd_Clk_Ready  : in time;
     constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
@@ -129,15 +131,15 @@ package AvalonStreamComponentPkg is
   );
 
   procedure WaitForReady (
-  signal Clk         : in std_logic;
-  signal Ready       : in std_logic;
-  constant TimeOut   : in time;
-  constant AlertLogID: in AlertLogIDType;
-  constant Msg       : in string
-);
+    signal Clk          : in std_logic;
+    signal Ready        : in std_logic;
+    constant TimeOut    : in time;
+    constant AlertLogID : in AlertLogIDType;
+    constant Msg        : in string
+  );
 
   procedure ReverseSymbolOrder (
-    variable Data      : inout std_logic_vector;
+    variable Data        : inout std_logic_vector;
     constant SymbolWidth : in integer;
     constant TotalWidth  : in integer
   );
@@ -159,36 +161,36 @@ package body AvalonStreamComponentPkg is
     signal ReadyAllowanceCyclesCount : inout integer;
     constant tpd_Clk_Valid           : in time;
     constant AlertLogID              : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage          : in string := "";
-    constant TimeOutPeriod           : in time := -1 sec
+    constant TimeOutMessage          : in string         := "";
+    constant TimeOutPeriod           : in time           := - 1 sec
   ) is
   begin
     if Ready = '1' then
       Valid <= '1' after tpd_Clk_Valid;
-  
+
     elsif StartOfNewStream = 1 then
       ReadyAllowanceCyclesCount <= ReadyAllowance;
-  
+
       if ReadyLatency > 0 then
         WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
         for i in 1 to ReadyLatency loop
           wait until Clk = '1';
         end loop;
       end if;
-  
+
       Valid <= '1' after tpd_Clk_Valid;
-  
+
     elsif StartOfNewStream = 0 then
       if ReadyAllowance > ReadyLatency then
         if Ready = '0' and ReadyAllowanceCyclesCount > 0 then
           ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
-          Valid <= '1' after tpd_Clk_Valid;
+          Valid                     <= '1' after tpd_Clk_Valid;
         elsif Ready = '0' then
           Valid <= '0' after tpd_Clk_Valid;
         else
           Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
         end if;
-  
+
       elsif ReadyAllowance = ReadyLatency then
         Valid <= '1' after tpd_Clk_Valid;
         if Ready /= '1' then
@@ -197,7 +199,7 @@ package body AvalonStreamComponentPkg is
         end if;
       end if;
     end if;
-  
+
     wait until Clk = '1';
   end procedure;
 
@@ -272,14 +274,16 @@ package body AvalonStreamComponentPkg is
     signal Data             : in std_logic_vector;
     signal TransRec         : inout StreamRecType;
     signal WordsInPacket    : inout integer;
+    constant BeatsPerCycle  : in integer;
     constant ByteOrder      : in boolean;
+    constant WordWidth      : in integer;
     constant SymbolWidth    : in integer;
     constant tpd_Clk_Ready  : in time;
     constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string         := "";
     constant TimeOutPeriod  : in time           := - 1 sec
   ) is
-    variable vData : std_logic_vector(Data'range);
+    variable vData : std_logic_vector(Data'range) := (others => 'X');
   begin
     WordsInPacket <= 0;
     loop
@@ -295,7 +299,12 @@ package body AvalonStreamComponentPkg is
       if ByteOrder then
         ReverseSymbolOrder(vData, SymbolWidth, Data'length);
       end if;
-      push(TransRec.BurstFifo, vData);
+      for i in 0 to BeatsPerCycle - 1 loop
+          push(
+          TransRec.BurstFifo,
+          vData((i + 1) * WordWidth - 1 downto i * WordWidth)
+          );
+        end loop;
       Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
       WordsInPacket <= WordsInPacket + 1;
       exit when Valid = '1' and StartOfPacket = '1';
@@ -315,7 +324,12 @@ package body AvalonStreamComponentPkg is
         if ByteOrder then
           ReverseSymbolOrder(vData, SymbolWidth, Data'length);
         end if;
-        push(TransRec.BurstFifo, vData);
+        for i in 0 to BeatsPerCycle - 1 loop
+          push(
+          TransRec.BurstFifo,
+          vData((i + 1) * WordWidth - 1 downto i * WordWidth)
+          );
+        end loop;
         Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
         WordsInPacket <= WordsInPacket + 1;
         wait for 0 ns;
@@ -330,11 +344,11 @@ package body AvalonStreamComponentPkg is
   end procedure;
   -------------------------------------------------------------
   procedure WaitForReady (
-    signal Clk         : in std_logic;
-    signal Ready       : in std_logic;
-    constant TimeOut   : in time;
-    constant AlertLogID: in AlertLogIDType;
-    constant Msg       : in string
+    signal Clk          : in std_logic;
+    signal Ready        : in std_logic;
+    constant TimeOut    : in time;
+    constant AlertLogID : in AlertLogIDType;
+    constant Msg        : in string
   ) is
   begin
     if TimeOut > 0 sec then

@@ -247,17 +247,21 @@ begin
         while not IsEmpty(PacketFifo) loop
           if (BeatsPerCycle > 1) then
             for i in 0 to (BeatsPerCycle - 1) loop
-              if IsEmpty(TransRec.TransmitFifo) then
+              if IsEmpty(PacketFifo) then
                 Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => 'X');
                 vEmptyBeats := vEmptyBeats + 1;
               else
-                vData := Pop(TransRec.TransmitFifo);
+                vData := Pop(PacketFifo);
                 Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
               end if;
             end loop;
           else
-            (vData) := Pop(TransRec.TransmitFifo);
-            Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData;
+              vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := Pop(TransRec.BurstFifo);
+              if (ByteOrder = true) then
+                ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
+              end if;
+              Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+            
           end if;
 
           -- check if is the last word in the packet

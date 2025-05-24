@@ -85,6 +85,7 @@ begin
     variable DispatcherReceiveCount : integer := 0;
     variable TryWordWaiting         : boolean;
     variable vData    : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vWord : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
     variable ExpectedData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
   begin
     wait for 0 ns;
@@ -168,12 +169,12 @@ begin
         when GET_PACKET =>
           TransRec.IntFromModel <= PacketWordLength;
         when CHECK_WORD_OF_PACKET =>
-          vData        := pop(TransRec.BurstFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
-          ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_DATA_WIDTH);
+          vWord        := pop(TransRec.BurstFifo);
+          ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
           AffirmIf(DataCheckID,
-          (MetaMatch(vData, ExpectedData)),
+          (MetaMatch(vWord, ExpectedData)),
           "PacketWord: " &
-          " Received.  Data: " & to_hxstring(vData),
+          " Received.  Data: " & to_hxstring(vWord),
           " Expected.  Data: " & to_hxstring(ExpectedData),
           TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
           );
@@ -275,8 +276,6 @@ begin
     variable vData            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable ReadyBeforeValid : integer := 1;
     variable ReadyDelayCycles : integer := 0;
-    variable Word             : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-    variable Offset           : integer;
   begin
     -- Initialize
     Ready <= '0';
@@ -304,6 +303,8 @@ begin
         TransRec      => TransRec,
         WordsInPacket => PacketWordLength,
         ByteOrder     => ByteOrder,
+        WordWidth     => AVALON_STREAM_WORD_WIDTH,
+        BeatsPerCycle    => BeatsPerCycle,
         SymbolWidth   => AVALON_STREAM_SYMBOL_WIDTH,
         tpd_Clk_Ready => tpd_Clk_oReady,
         AlertLogID    => ModelID

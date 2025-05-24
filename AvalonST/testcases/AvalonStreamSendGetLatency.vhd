@@ -37,32 +37,33 @@ begin
   -- Transmitter Process
   ------------------------------------------------------------
   transmitter_proc : process
-    variable ExpData : std_logic_vector(31 downto 0) := (0 => '1', others => '0');
+    variable ExpData : slv_array_t(0 downto 0) := (0 => (31 downto 0 => '0'));
   begin
     wait until Reset = '1';
     wait for 0 ns;
+    ExpData(0)(0) := '1';
     SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 3);
     WaitForBarrier(SyncPoint);
     for i in 0 to 3 loop
-      SendAsync(StreamTxRec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+      SendAsync(StreamTxRec, ExpData, 1);
+      ExpData(0) := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData(0))) + 1, ExpData(0)'length));
     end loop;
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
-    SendAsync(StreamTxRec, ExpData);
+    SendAsync(StreamTxRec, ExpData, 1);
     SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 0);
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
     wait for 50 ns; -- introduce another delay to see if ready is only asserted when valid
 
-    ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+    ExpData(0) := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData(0))) + 1, ExpData(0)'length));
     for i in 0 to 3 loop
-      SendAsync(StreamTxRec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+      SendAsync(StreamTxRec, ExpData, 1);
+      ExpData(0) := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData(0))) + 1, ExpData(0)'length));
     end loop;
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
-    SendAsync(StreamTxRec, ExpData);
+    SendAsync(StreamTxRec, ExpData, 1);
     WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
     wait;
@@ -72,36 +73,37 @@ begin
   -- Receiver Process
   ------------------------------------------------------------
   receiver_proc : process
-    variable rx_data : std_logic_vector(31 downto 0);
+    variable rx_data   : std_logic_vector(31 downto 0);
     variable available : boolean;
-    variable ExpData : std_logic_vector(31 downto 0) := (0 => '1', others => '0');
+    variable ExpData   : slv_array_t(0 downto 0) := (0 => (31 downto 0 => '0'));
   begin
     wait until Reset = '1';
     wait for 0 ns;
+    ExpData(0)(0) := '1';
     WaitForBarrier(SyncPoint);
     Receive(StreamRxRec, 4);
     WaitForTransaction(StreamRxRec);
     for i in 0 to 3 loop
-      Check(StreamRxRec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+      Check(StreamRxRec, ExpData(0));
+      ExpData(0) := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData(0))) + 1, ExpData(0)'length));
     end loop;
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
     Receive(StreamRxRec, 1);
     WaitForTransaction(StreamRxRec);
-    Check(StreamRxRec, ExpData);
+    Check(StreamRxRec, ExpData(0));
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
-    ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+    ExpData(0) := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData(0))) + 1, ExpData(0)'length));
     Receive(StreamRxRec, 4);
     WaitForTransaction(StreamRxRec);
     for i in 0 to 3 loop
-      Check(StreamRxRec, ExpData);
-      ExpData := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData)) + 1, ExpData'length));
+      Check(StreamRxRec, ExpData(0));
+      ExpData(0) := std_logic_vector(to_unsigned(to_integer(unsigned(ExpData(0))) + 1, ExpData(0)'length));
     end loop;
     wait for 50 ns;
     WaitForBarrier(SyncPoint);
-    
+
     WaitForTransaction(StreamRxRec);
     WaitForClock(StreamRxRec, 5);
     WaitForBarrier(TestDone);
