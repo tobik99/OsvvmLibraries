@@ -130,6 +130,16 @@ package AvalonStreamComponentPkg is
     constant TimeOutPeriod  : in time           := - 1 sec
   );
 
+  procedure DoPrepareTransmitData (
+    signal Data            : out std_logic_vector;
+    signal Scoreboard        : inout ScoreboardIdType;
+    variable EmptyBeats : inout integer;
+    constant BeatsPerCycle : in integer;
+    constant ByteOrder     : in boolean;
+    constant WordWidth     : in integer;
+    constant SymbolWidth   : in integer
+  );
+
   procedure WaitForReady (
     signal Clk          : in std_logic;
     signal Ready        : in std_logic;
@@ -300,11 +310,11 @@ package body AvalonStreamComponentPkg is
         ReverseSymbolOrder(vData, SymbolWidth, Data'length);
       end if;
       for i in 0 to BeatsPerCycle - 1 loop
-          push(
-          TransRec.BurstFifo,
-          vData((i + 1) * WordWidth - 1 downto i * WordWidth)
-          );
-        end loop;
+        push(
+        TransRec.BurstFifo,
+        vData((i + 1) * WordWidth - 1 downto i * WordWidth)
+        );
+      end loop;
       Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
       WordsInPacket <= WordsInPacket + 1;
       exit when Valid = '1' and StartOfPacket = '1';
@@ -377,5 +387,36 @@ package body AvalonStreamComponentPkg is
       Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
     end loop;
     Data := vDataReversed;
+  end procedure;
+  procedure DoPrepareTransmitData (
+    signal Data            : out std_logic_vector;
+    signal Scoreboard        : inout ScoreboardIdType;
+    variable EmptyBeats : inout integer;
+    constant BeatsPerCycle : in integer;
+    constant ByteOrder     : in boolean;
+    constant WordWidth     : in integer;
+    constant SymbolWidth   : in integer
+  ) is
+    variable vData : std_logic_vector(WordWidth -1 downto 0) := (others => 'X');
+    variable vEmptyBeats         : integer                      := 0;
+  begin
+    if (BeatsPerCycle > 1) then
+      for i in 0 to (BeatsPerCycle - 1) loop
+        if IsEmpty(Scoreboard) then
+          Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= (others => 'X');
+          vEmptyBeats := vEmptyBeats + 1;
+        else
+          vData := Pop(Scoreboard);
+          Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= vData;
+        end if;
+      end loop;
+    else
+      vData(WordWidth - 1 downto 0) := Pop(Scoreboard);
+      if (ByteOrder = true) then
+        ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
+      end if;
+      Data(WordWidth - 1 downto 0) <= vData(WordWidth - 1 downto 0);
+    end if;
+    EmptyBeats := vEmptyBeats;
   end procedure;
 end package body AvalonStreamComponentPkg;

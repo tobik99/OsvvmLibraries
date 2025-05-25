@@ -222,8 +222,6 @@ begin
   TransmitHandler : process is
     variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0) := (Data'range => 'X');
     variable vEmptyBeats         : integer                                                 := 0;
-    variable vSymbolCount        : integer                                                 := 0;
-
   begin
     -- initialize outputs
     Valid         <= '0';
@@ -245,24 +243,7 @@ begin
         wait for 0 ns;
 
         while not IsEmpty(PacketFifo) loop
-          if (BeatsPerCycle > 1) then
-            for i in 0 to (BeatsPerCycle - 1) loop
-              if IsEmpty(PacketFifo) then
-                Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => 'X');
-                vEmptyBeats := vEmptyBeats + 1;
-              else
-                vData := Pop(PacketFifo);
-                Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData;
-              end if;
-            end loop;
-          else
-              vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := Pop(TransRec.BurstFifo);
-              if (ByteOrder = true) then
-                ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
-              end if;
-              Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-            
-          end if;
+          DoPrepareTransmitData(Data, TransRec.BurstFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
 
           -- check if is the last word in the packet
           EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(PacketFifo) else
@@ -311,40 +292,19 @@ begin
         end if;
         -- Get Transaction
         -- Data preparation
-        if (BeatsPerCycle > 1) then
-          for i in 0 to (BeatsPerCycle - 1) loop
-            if IsEmpty(TransRec.TransmitFifo) then
-              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= (others => 'X');
-              vEmptyBeats := vEmptyBeats + 1;
-            else
-              vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := Pop(TransRec.TransmitFifo);
-              if (ByteOrder = true) then
-                ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
-              end if;
-              Data((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i) <= vData((AVALON_STREAM_WORD_WIDTH - 1) + AVALON_STREAM_WORD_WIDTH * i downto AVALON_STREAM_WORD_WIDTH * i);
-            end if;
-          end loop;
-          Log(ModelID,
-          "AvalonStream Transmit." &
-          "  Data: " & to_hxstring(vData(AVALON_STREAM_DATA_WIDTH - 1 downto 0)), INFO
-          );
-        else
-          vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := Pop(TransRec.TransmitFifo);
-          if (ByteOrder = true) then
-            ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
-          end if;
-          Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) <= vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-          Log(ModelID,
-          "AvalonStream Transmit." &
-          "  Data: " & to_hxstring(vData), INFO
-          );
-        end if;
-        vData := (others => 'X');
+        DoPrepareTransmitData(Data, TransRec.TransmitFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
+        Log(ModelID,
+        "AvalonStream Transmit." &
+        "  Data: " & to_hxstring(vData), INFO
+        );
+        vData        := (others => 'X');
         vDataReverse := (others => 'X');
 
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
+
+        
         if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream          <= 1;
           Valid                     <= '0' after tpd_Clk_Valid;
