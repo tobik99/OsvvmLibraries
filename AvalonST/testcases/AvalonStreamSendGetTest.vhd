@@ -3,6 +3,11 @@ architecture AvalonStreamSendGetTest of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
   signal TestDone   : integer_barrier               := 1;
   signal ExpData    : std_logic_vector(31 downto 0) := x"FFFFFFFF";
+  signal ExpData2   : slv_vector(0 to 1)            := (x"10011001", x"F00FF00F");
+  signal CheckData : slv_array_t(0 to 1)(31 downto 0) := (
+    x"10011001", -- 1st data
+    x"F00FF00F"  -- 2nd data
+  );
   signal RxData     : std_logic_vector(31 downto 0);
 begin
 
@@ -13,7 +18,7 @@ begin
   ControlProc : process
   begin
     -- Initialization of test
-   
+
     SetTestName("AvalonStreamSendGetTest");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE);   -- Enable INFO logs
@@ -29,7 +34,7 @@ begin
 
     -- Wait for test to finish
     -- every process has to call its own TestDone, otherwise the watchdog will execute
-    WaitForBarrier(TestDone, 3 ms);
+    WaitForBarrier(TestDone, 200 ns);
     AlertIf(now >= 200 ns, "Test finished due to timeout");
     AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
 
@@ -43,24 +48,41 @@ begin
     wait until Reset = '1';
     wait for 0 ns;
 
-    SendAsync(StreamTxRec, ExpData);
-    --SendAsync(io_tx_trans_rec, ExpData);
-    WaitForClock(StreamTxRec, 2);
-    --Send(io_tx_trans_rec, ExpData);
-    --Send(io_tx_trans_rec, ExpData);
+   
+    Send(StreamTxRec, CheckData(0));
+    WaitForTransaction(StreamTxRec);
+    wait for 20 ns;
+
+
+    SendBurstVector(StreamTxRec, ExpData2);
+    WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
     wait;
   end process transmitter_proc;
 
   receiver_proc : process
-    variable rx_data : std_logic_vector(31 downto 0);
+    variable rx_data   : std_logic_vector(31 downto 0);
+    variable fifoWords : integer := 2;
+    variable PopData : std_logic_vector(31 downto 0);
   begin
     wait until Reset = '1';
-    Get(StreamRxRec, rx_data);
-    RxData <= rx_data;
-    wait for 0 ns;
-    AffirmIf(ExpData = RxData, "Data: " & to_string(ExpData),
-    " /= Expected: " & to_string(RxData));
+    ReceiveBurst(StreamRxRec, 1);
+    WaitForTransaction(StreamRxRec);
+    GetBurst(StreamRxRec, fifoWords);
+    for i in 0 to 0 loop
+      PopData := pop(StreamRxRec.BurstFifo);
+      AffirmIf(PopData = CheckData(i), "Data is right");
+    end loop;
+ wait for 20 ns;
+
+
+    ReceiveBurst(StreamRxRec, 2);
+    WaitForTransaction(StreamRxRec);
+    GetBurst(StreamRxRec, fifoWords);
+     for i in 0 to fifoWords - 1 loop
+      PopData := pop(StreamRxRec.BurstFifo);
+      AffirmIf(PopData = CheckData(i), "Data is right");
+    end loop;
 
     WaitForClock(StreamRxRec, 2);
     WaitForBarrier(TestDone);
@@ -76,6 +98,3 @@ configuration AvalonStreamSendGetTest of AvalonStreamTestHarness is
     end for;
   end for;
 end AvalonStreamSendGetTest;
-
-
-

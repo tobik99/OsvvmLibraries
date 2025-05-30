@@ -51,10 +51,13 @@ architecture bhv of AvalonStreamReceiver is
   signal ModelID                                : AlertLogIDType;
   signal DataCheckID                            : AlertLogIDType;
   signal WordRequestCount, WordReceiveCount     : integer := 0;
+  signal BurstRequestCount, BurstReceiveCount   : integer := 0;
   signal PacketRequestCount, PacketReceiveCount : integer := 0;
   signal PacketWordLength                       : integer := 0;
   signal StartOfNewStream                       : integer := 1;
   signal PacketLastWordEmpty                    : integer := 0;
+
+  signal ReceiveFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   -- Verification Component Configuration
   signal WaitForGet     : boolean := true;
   signal ReadyLatency   : integer := 0;
@@ -63,6 +66,10 @@ architecture bhv of AvalonStreamReceiver is
   signal PacketTransfer : boolean := false;
   signal BeatsPerCycle  : integer := 1;
   signal WordWidth      : integer := AVALON_STREAM_DATA_WIDTH;
+
+  constant DEFAULT_BURST_MODE : StreamFifoBurstModeType := STREAM_BURST_WORD_MODE;
+  signal BurstFifoMode        : StreamFifoBurstModeType := DEFAULT_BURST_MODE;
+  signal BurstFifoByteMode    : boolean                 := (DEFAULT_BURST_MODE = STREAM_BURST_BYTE_MODE);
 
 begin
   ------------------------------------------------------------
@@ -75,22 +82,27 @@ begin
     ID := NewID(MODEL_INSTANCE_NAME);
     ModelID     <= ID;
     DataCheckID <= NewID("Data Check", ID);
+    ReceiveFifo <= NewID("ReceiveFifo", ID, ReportMode => DISABLED, Search => PRIVATE_NAME);
     wait;
   end process Initialize;
 
   ---------------------------
 
   TransactionDispatcher : process is
-    alias Operation                 : StreamOperationType is TransRec.Operation;
-    variable DispatcherReceiveCount : integer := 0;
-    variable TryWordWaiting         : boolean;
-    variable vData    : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    variable vWord : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-    variable ExpectedData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+    alias Operation                          : StreamOperationType is TransRec.Operation;
+    variable PopData                         : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vWord                           : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+    variable ExpectedData                    : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+    variable TryWordWaiting, TryBurstWaiting : boolean := false;
+    variable DispatcherReceiveCount          : integer := 0;
+    variable BurstTransferCount              : integer := 0;
+    variable WordCount                       : integer;
+    variable FifoWordCount, CheckWordCount   : integer;
+    variable BurstBoundary                   : std_logic;
+    variable DropUndriven                    : boolean := FALSE;
   begin
     wait for 0 ns;
-    TransRec.BurstFifo    <= NewID("RxPacketFifo", ModelID, Search   => PRIVATE_NAME);
-    TransRec.TransmitFifo <= NewID("RxTransmitFifo", ModelID, Search => PRIVATE_NAME);
+    TransRec.BurstFifo <= NewID("RxPacketFifo", ModelID, Search => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
@@ -101,73 +113,128 @@ begin
 
       case Operation is
         when GET | TRY_GET =>
-          if IsEmpty(TransRec.TransmitFifo) and IsTry(Operation) then
-            if not TryWordWaiting then
-              increment(WordRequestCount);
-            end if;
-            TryWordWaiting := TRUE;
+          -- if IsEmpty(TransRec.TransmitFifo) and IsTry(Operation) then
+          --   if not TryWordWaiting then
+          --     increment(WordRequestCount);
+          --   end if;
+          --   TryWordWaiting := TRUE;
+          --   -- Return if no data
+          --   TransRec.BoolFromModel  <= FALSE;
+          --   TransRec.DataFromModel  <= (TransRec.DataFromModel'range  => '0');
+          --   TransRec.ParamFromModel <= (TransRec.ParamFromModel'range => '0');
+          --   wait for 0 ns;
+          -- else
+          --   if not TryWordWaiting then
+          --     increment(WordRequestCount);
+          --   end if;
+          --   TryWordWaiting         := FALSE;
+          --   DispatcherReceiveCount := DispatcherReceiveCount + 1;
+
+          --   -- Get data
+          --   TransRec.BoolFromModel <= TRUE;
+          --   if IsEmpty(TransRec.TransmitFifo) then
+          --     -- Wait for data
+          --     WaitForToggle(WordReceiveCount);
+          --   end if;
+
+          -- --  (vData) := pop(TransRec.BurstFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+
+          --   TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
+
+          --   if IsCheck(Operation) then
+          --     ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
+          --     AffirmIf(DataCheckID,
+          --     (MetaMatch(vData, ExpectedData)),
+          --     " Received.  Data: " & to_hxstring(vData),
+          --     " Expected.  Data: " & to_hxstring(ExpectedData),
+          --     TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
+          --     );
+          --   else
+          --     Log(ModelID,
+          --     "Word Receive. " &
+          --     " Data: " & to_hxstring(vData),
+          --     INFO, TransRec.BoolToModel
+          --     );
+          --   end if;
+          -- end if;
+        when CHECK | TRY_CHECK =>
+          -- if IsEmpty(TransRec.TransmitFifo) then
+          --   Alert(ModelID, "Can not check any data due to the Receive FIFO being empty!", FAILURE);
+          -- end if;
+          -- vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := pop(TransRec.TransmitFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+
+          -- TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
+
+          -- if IsCheck(Operation) then
+          --   ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
+          --   AffirmIf(DataCheckID,
+          --   (MetaMatch(vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0), ExpectedData)),
+          --   " Received.  Data: " & to_hxstring(vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0)),
+          --   " Expected.  Data: " & to_hxstring(ExpectedData),
+          --   TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
+          --   );
+          -- end if;
+        when RECEIVE_BURST =>
+          increment(BurstRequestCount);
+          WordRequestCount <= WordRequestCount + TransRec.IntToModel;
+          wait for 0 ns;
+        when GET_BURST | TRY_GET_BURST =>
+          if (BurstReceiveCount - BurstTransferCount) = 0 and IsTry(Operation) then
+            TryBurstWaiting := TRUE;
             -- Return if no data
             TransRec.BoolFromModel  <= FALSE;
             TransRec.DataFromModel  <= (TransRec.DataFromModel'range  => '0');
             TransRec.ParamFromModel <= (TransRec.ParamFromModel'range => '0');
             wait for 0 ns;
           else
-            if not TryWordWaiting then
-              increment(WordRequestCount);
-            end if;
-            TryWordWaiting         := FALSE;
-            DispatcherReceiveCount := DispatcherReceiveCount + 1;
+            TryBurstWaiting        := FALSE;
+            DispatcherReceiveCount := DispatcherReceiveCount + 1; -- Operation or #Words Transfered based?
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-            if IsEmpty(TransRec.TransmitFifo) then
+            if (BurstReceiveCount - BurstTransferCount) = 0 then
               -- Wait for data
-              WaitForToggle(WordReceiveCount);
+              WaitForToggle(BurstReceiveCount);
             end if;
+            -- ReceiveFIFO: (TData & TID & TDest & TUser & TLast)
+            FifoWordCount := 0;
+            WordCount     := 0;
+            loop
+              (PopData, BurstBoundary) := pop(ReceiveFifo);
+              -- BurstBoundary indication does not contain data for
+              -- this transaction so exit
+              exit when BurstBoundary = '1';
+              WordCount := WordCount + 1;
+              case BurstFifoMode is
+                  -- when STREAM_BURST_BYTE_MODE =>
+                  --   Avalon Stream does not support byte mode
+                when STREAM_BURST_WORD_MODE =>
+                  for i in BeatsPerCycle - 1 downto 0 loop
+                    vWord := PopData((i + 1) * AVALON_STREAM_WORD_WIDTH - 1 downto i * AVALON_STREAM_WORD_WIDTH);
+                    Push(TransRec.BurstFifo, vWord);
+                    FifoWordCount := FifoWordCount + 1;
+                  end loop;
 
-            (vData) := pop(TransRec.TransmitFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+                when others =>
+                  Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
+              end case;
+            end loop;
 
-            TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
+            -- Adjust WordRequestCount for the number of words consumed during the burst
+            -- WordRequestCount <= Increment(WordRequestCount, WordCount);
 
-            if IsCheck(Operation) then
-              ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
-              AffirmIf(DataCheckID,
-              (MetaMatch(vData, ExpectedData)),
-              " Received.  Data: " & to_hxstring(vData),
-              " Expected.  Data: " & to_hxstring(ExpectedData),
-              TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
-              );
-            else
-              Log(ModelID,
-              "Word Receive. " &
-              " Data: " & to_hxstring(vData),
-              INFO, TransRec.BoolToModel
-              );
-            end if;
-          end if;
-        when CHECK | TRY_CHECK =>
-          if IsEmpty(TransRec.TransmitFifo) then
-            Alert(ModelID, "Can not check any data due to the Receive FIFO being empty!", FAILURE);
-          end if;
-          vData(AVALON_STREAM_WORD_WIDTH -1 downto 0) := pop(TransRec.TransmitFifo); -- modelsim failure = illegal target maybe adapt scoreboard?
+            BurstTransferCount := BurstTransferCount + 1;
+            TransRec.IntFromModel  <= FifoWordCount;
+            TransRec.DataFromModel <= SafeResize(ModelID, Data, TransRec.DataFromModel'length);
+            -- TransRec.ParamFromModel <= SafeResize(ModelID, Param, TransRec.ParamFromModel'length);
 
-          TransRec.DataFromModel <= SafeResize(ModelID, vData, TransRec.DataFromModel'length);
-
-          if IsCheck(Operation) then
-            ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
-            AffirmIf(DataCheckID,
-            (MetaMatch(vData(AVALON_STREAM_WORD_WIDTH -1 downto 0), ExpectedData)),
-            " Received.  Data: " & to_hxstring(vData(AVALON_STREAM_WORD_WIDTH -1 downto 0)),
-            " Expected.  Data: " & to_hxstring(ExpectedData),
-            TransRec.BoolToModel or IsLogEnabled(ModelID, INFO)
+            Log(ModelID,
+            "Burst Receive. " &
+            " Operation# " & to_string (DispatcherReceiveCount) & " ",
+            INFO, TransRec.BoolToModel or IsLogEnabled(ModelID, PASSED)
             );
+            wait for 0 ns;
           end if;
-        when RECEIVE =>
-          WordRequestCount <= WordRequestCount + TransRec.IntToModel;
-        when RECEIVE_PACKET =>
-          PacketRequestCount <= PacketRequestCount + 1;
-        when GET_PACKET =>
-          TransRec.IntFromModel <= PacketWordLength;
         when CHECK_WORD_OF_PACKET =>
           vWord        := pop(TransRec.BurstFifo);
           ExpectedData := SafeResize(ModelID, TransRec.DataToModel, AVALON_STREAM_WORD_WIDTH);
@@ -182,8 +249,8 @@ begin
           if (WordReceiveCount /= WordRequestCount) then
             wait until WordReceiveCount = WordRequestCount;
           end if;
-          if (PacketRequestCount /= PacketReceiveCount) then
-            wait until PacketReceiveCount = PacketRequestCount;
+          if (BurstRequestCount /= BurstReceiveCount) then
+            wait until BurstRequestCount = BurstReceiveCount;
           end if;
         when WAIT_FOR_CLOCK =>
           WaitForClock(Clk, TransRec.IntToModel);
@@ -239,6 +306,9 @@ begin
               Log(ModelID, "Setting AvalonStream Receiver Ready_Allowance to " & to_string(TransRec.IntToModel), INFO);
             when READY_LATENCY =>
               ReadyLatency <= TransRec.IntToModel;
+            when SET_BURST_MODE =>
+              BurstFifoMode     <= TransRec.IntToModel;
+              BurstFifoByteMode <= (TransRec.IntToModel = STREAM_BURST_BYTE_MODE);
 
             when others =>
               Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
@@ -260,6 +330,8 @@ begin
               TransRec.IntFromModel <= ReadyAllowance;
             when READY_LATENCY =>
               TransRec.IntFromModel <= ReadyLatency;
+            when GET_BURST_MODE =>
+              TransRec.IntFromModel <= BurstFifoMode;
             when others =>
               Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
           end case;
@@ -274,6 +346,7 @@ begin
 
   ReceiveHandler : process
     variable vData            : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+    variable vDataWord        : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
     variable ReadyBeforeValid : integer := 1;
     variable ReadyDelayCycles : integer := 0;
   begin
@@ -286,12 +359,12 @@ begin
     ReceiveLoop : loop
       if WaitForGet then
         -- if no request, wait until we have one
-        if not (WordRequestCount > WordReceiveCount or PacketRequestCount > PacketReceiveCount) then
-          wait until (WordRequestCount > WordReceiveCount) or (PacketRequestCount > PacketReceiveCount) or not WaitForGet;
+        if not (WordRequestCount > WordReceiveCount or BurstRequestCount > BurstReceiveCount) then
+          wait until (WordRequestCount > WordReceiveCount) or (BurstRequestCount > BurstReceiveCount) or not WaitForGet;
         end if;
       end if;
 
-      if PacketRequestCount > PacketReceiveCount then
+      if PacketRequestCount > PacketReceiveCount and PacketTransfer then
         -- Packet Mode
         DoAvalonStreamPacketReadyHandshake(
         Clk           => Clk,
@@ -304,7 +377,7 @@ begin
         WordsInPacket => PacketWordLength,
         ByteOrder     => ByteOrder,
         WordWidth     => AVALON_STREAM_WORD_WIDTH,
-        BeatsPerCycle    => BeatsPerCycle,
+        BeatsPerCycle => BeatsPerCycle,
         SymbolWidth   => AVALON_STREAM_SYMBOL_WIDTH,
         tpd_Clk_Ready => tpd_Clk_oReady,
         AlertLogID    => ModelID
@@ -314,7 +387,7 @@ begin
         increment(PacketReceiveCount);
         wait for 0 ns;
 
-      elsif (WordRequestCount > WordReceiveCount) then
+      elsif WordRequestCount > WordReceiveCount and not PacketTransfer then
         -- normal receive mode
         DoAvalonStreamReadyHandshake(
         Clk              => Clk,
@@ -328,21 +401,31 @@ begin
         tpd_Clk_Ready    => tpd_Clk_oReady,
         AlertLogID       => ModelID
         );
-
         vData := Data;
-        if (ByteOrder = true) then
-          ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
-        end if;
-        for i in 0 to BeatsPerCycle - 1 loop
-          push(
-          TransRec.TransmitFifo,
-          vData((i + 1) * AVALON_STREAM_WORD_WIDTH - 1 downto i * AVALON_STREAM_WORD_WIDTH)
-          );
-        end loop;
-        Log(ModelID, "WordTransfer: Received Word: " & to_hxstring(vData), INFO);
+        -- if (ByteOrder = true) then
+        --   ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
+        -- end if;
+        --   if BurstFifoByteMode and BeatsPerCycle = 1 then 
+        --   -- AvalonStream uses ByteMode as WordMode!!!
+        --   -- todo hier weitermachen
+        --     push(TransRec.BurstFifo, vData(AVALON_STREAM_WORD_WIDTH - 1 downto 0));
+        --   for i in 0 to BeatsPerCycle - 1 loop
+        --     push(
+        --     TransRec.TransmitFifo,
+        --     vData((i + 1) * AVALON_STREAM_WORD_WIDTH - 1 downto i * AVALON_STREAM_WORD_WIDTH)
+        --     );
+        --   end loop;
+        --   Log(ModelID, "WordTransfer: Received Word: " & to_hxstring(vData), INFO);
+        --   else
+        -- end if;
+        Log(ModelID,
+        "Word Transfer: Received Word: " & to_hxstring(vData), INFO);
+        push(ReceiveFifo, vData & '0');
         if (WordReceiveCount + 1 = WordRequestCount) then
-          StartOfNewStream <= 1;
-          Ready            <= '0' after tpd_Clk_oReady;
+          StartOfNewStream  <= 1;
+          BurstReceiveCount <= BurstReceiveCount + 1;
+          push(ReceiveFifo, vData & '1');
+          Ready <= '0' after tpd_Clk_oReady;
         else
           if (ReadyAllowance > 0) and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
             Ready <= '0' after tpd_Clk_oReady;

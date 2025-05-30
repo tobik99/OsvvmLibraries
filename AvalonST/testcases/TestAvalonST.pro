@@ -34,12 +34,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #  
-#include ../../OsvvmLibraries.pro
+#include ../../Common/Common.pro
 
 TestSuite AvalonStream
 include ../src/build.pro
 include ../testbench/testbench.pro
 
 SetSaveWaves true
-RunTest AvalonStreamBeatsPerCycle.vhd
-RunTest AvalonStreamPacketTransport.vhd
+RunTest AvalonStreamSendGetTest.vhd

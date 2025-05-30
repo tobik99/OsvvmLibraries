@@ -20,6 +20,8 @@ package AvalonStreamOptionsPkg is
     READY_LATENCY,         -- Integer
     PACKET_TRANSFER,        -- Boolean
     PACKET_LAST_WORD_EMPTY, -- Integer
+    SET_BURST_MODE,
+    GET_BURST_MODE,
     WORD_WIDTH           -- Integer
     --DROP_UNDRIVEN,
     --THE_END

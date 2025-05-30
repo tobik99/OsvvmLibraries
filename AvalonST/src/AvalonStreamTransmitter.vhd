@@ -108,7 +108,9 @@ begin
         when SEND | SEND_ASYNC =>
           Log(ModelID,
           "AvalonStream Transmit.", ALWAYS);
-          TransmitRequestCount <= TransmitRequestCount + TransRec.IntToModel;
+          TransmitRequestCount <= TransmitRequestCount + 1;
+          vData := SafeResize(ModelID, TransRec.DataToModel, vData'length);
+          push(TransRec.BurstFifo, vData);
           wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
             wait until TransmitRequestCount = TransmitDoneCount;
@@ -117,13 +119,11 @@ begin
           if TransmitRequestCount /= TransmitDoneCount then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
-
-        when SEND_PACKET =>
-          PacketWordLength   <= TransRec.IntToModel;
-          PacketRequestCount <= PacketRequestCount + 1;
-          wait for 0 ns;
-          -- todo, check if packet transport is enabled
-
+        when SEND_BURST =>
+          TransmitRequestCount <= TransmitRequestCount + TransRec.IntToModel;
+          if IsBlocking(TransRec.Operation) then
+            wait until TransmitRequestCount = TransmitDoneCount;
+          end if;
         when WAIT_FOR_CLOCK =>
           WaitForClock(Clk, TransRec.IntToModel);
 
@@ -233,7 +233,7 @@ begin
     wait for 0 ns; -- two delta-cycles to ensure that the scoreboards are initialized
 
     TransmitLoop : loop
-      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransRec.TransmitFifo) then
+      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransRec.TransmitFifo) and TransmitRequestCount = TransmitDoneCount then
         wait on TransmitRequestCount, PacketRequestCount;
       end if;
       if PacketTransfer and (PacketRequestCount > PacketTransmitCount) then
@@ -242,7 +242,7 @@ begin
         EndOfPacket   <= '0' after tpd_Clk_EndOfPacket;
         wait for 0 ns;
 
-        while not IsEmpty(PacketFifo) loop
+        while not IsEmpty(PacketFifo) and PacketTransfer = true loop
           DoPrepareTransmitData(Data, TransRec.BurstFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
 
           -- check if is the last word in the packet
@@ -285,26 +285,21 @@ begin
         Data             <= (Data'range => 'X');
         wait for 0 ns;
       else
-
         -- Find Transaction
-        if IsEmpty(TransRec.TransmitFifo) and not PacketTransfer then
+        if IsEmpty(TransRec.BurstFifo) and not PacketTransfer then
           WaitForToggle(TransmitRequestCount);
         end if;
         -- Get Transaction
         -- Data preparation
-        DoPrepareTransmitData(Data, TransRec.TransmitFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
-        Log(ModelID,
-        "AvalonStream Transmit." &
-        "  Data: " & to_hxstring(vData), INFO
-        );
+        DoPrepareTransmitData(Data, TransRec.BurstFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
+       
         vData        := (others => 'X');
         vDataReverse := (others => 'X');
 
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
-
-        
+       
         if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream          <= 1;
           Valid                     <= '0' after tpd_Clk_Valid;
@@ -315,8 +310,10 @@ begin
         end if;
         TransmitDoneCount <= TransmitDoneCount + BeatsPerCycle - vEmptyBeats;
         vEmptyBeats := 0;
-        wait for 0 ns;
-
+         Log(ModelID,
+        "AvalonStream Transmit." &
+        "  Data: " & to_hxstring(Data), INFO
+        );
         wait for 0 ns;
       end if;
     end loop;

@@ -248,7 +248,7 @@ package body AvalonStreamComponentPkg is
     end if;
 
     if Valid = '1' then
-      if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then -- skips the check
+      if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
         AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
       else
         if not ReadyBeforeValid then
@@ -397,13 +397,13 @@ package body AvalonStreamComponentPkg is
     constant WordWidth     : in integer;
     constant SymbolWidth   : in integer
   ) is
-    variable vData : std_logic_vector(WordWidth -1 downto 0) := (others => 'X');
+    variable vData : std_logic_vector(WordWidth -1 downto 0) := (others => 'U');
     variable vEmptyBeats         : integer                      := 0;
   begin
     if (BeatsPerCycle > 1) then
       for i in 0 to (BeatsPerCycle - 1) loop
         if IsEmpty(Scoreboard) then
-          Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= (others => 'X');
+          Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= (others => 'U');
           vEmptyBeats := vEmptyBeats + 1;
         else
           vData := Pop(Scoreboard);
