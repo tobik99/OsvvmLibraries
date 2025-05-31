@@ -132,8 +132,11 @@ package AvalonStreamComponentPkg is
 
   procedure DoPrepareTransmitData (
     signal Data            : out std_logic_vector;
-    signal Scoreboard        : inout ScoreboardIdType;
-    variable EmptyBeats : inout integer;
+    signal Channel         : out std_logic_vector;
+    signal Empty           : out std_logic_vector;
+    signal Scoreboard      : inout ScoreboardIdType;
+    variable EmptyBeats    : inout integer;
+    constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
     constant ByteOrder     : in boolean;
     constant WordWidth     : in integer;
@@ -390,33 +393,40 @@ package body AvalonStreamComponentPkg is
   end procedure;
   procedure DoPrepareTransmitData (
     signal Data            : out std_logic_vector;
-    signal Scoreboard        : inout ScoreboardIdType;
-    variable EmptyBeats : inout integer;
+    signal Channel         : out std_logic_vector;
+    signal Empty           : out std_logic_vector;
+    signal Scoreboard      : inout ScoreboardIdType;
+    variable EmptyBeats    : inout integer;
+    constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
     constant ByteOrder     : in boolean;
     constant WordWidth     : in integer;
     constant SymbolWidth   : in integer
   ) is
-    variable vData : std_logic_vector(WordWidth -1 downto 0) := (others => 'U');
-    variable vEmptyBeats         : integer                      := 0;
+    variable vData       : std_logic_vector(WordWidth - 1 downto 0) := (others => 'U');
+    variable vEmptyBeats : integer                                  := 0;
+    variable vChannel    : std_logic_vector(Channel'range);
+    variable vEmpty      : std_logic_vector(Empty'range);
+    variable vLast       : std_logic;
   begin
-    if (BeatsPerCycle > 1) then
-      for i in 0 to (BeatsPerCycle - 1) loop
-        if IsEmpty(Scoreboard) then
-          Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= (others => 'U');
-          vEmptyBeats := vEmptyBeats + 1;
-        else
-          vData := Pop(Scoreboard);
-          Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= vData;
+    case BurstFifoMode is
+      when STREAM_BURST_WORD_MODE =>
+        for i in 0 to (BeatsPerCycle - 1) loop
+          if IsEmpty(Scoreboard) then
+            Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= (others => 'U');
+            vEmptyBeats := vEmptyBeats + 1;
+          else
+            (vData, vChannel, vEmpty, vLast) := Pop(Scoreboard);
+            Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= vData;
+          end if;
+        end loop;
+      when others =>
+        vData(WordWidth - 1 downto 0) := Pop(Scoreboard);
+        if (ByteOrder = true) then
+          ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
         end if;
-      end loop;
-    else
-      vData(WordWidth - 1 downto 0) := Pop(Scoreboard);
-      if (ByteOrder = true) then
-        ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
-      end if;
-      Data(WordWidth - 1 downto 0) <= vData(WordWidth - 1 downto 0);
-    end if;
+        Data(WordWidth - 1 downto 0) <= vData(WordWidth - 1 downto 0);
+    end case;
     EmptyBeats := vEmptyBeats;
   end procedure;
 end package body AvalonStreamComponentPkg;

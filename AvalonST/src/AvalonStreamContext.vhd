@@ -49,4 +49,5 @@ context AvalonStreamContext is
     library osvvm_avalonst;
     use osvvm_avalonst.AvalonStreamOptionsPkg.all;
     use osvvm_avalonst.AvalonStreamComponentPkg.all;
+    use osvvm_avalonst.AvalonStreamTbPkg.all;
 end context AvalonStreamContext;

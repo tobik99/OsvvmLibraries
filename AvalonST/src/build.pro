@@ -1,5 +1,6 @@
 library osvvm_avalonst
 
+analyze ../src/AvalonStreamTbPkg.vhd
 analyze ../src/AvalonStreamOptionsPkg.vhd
 analyze ../src/AvalonStreamComponentPkg.vhd
 analyze ../src/AvalonStreamContext.vhd

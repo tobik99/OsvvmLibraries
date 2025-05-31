@@ -12,11 +12,15 @@ library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
 entity AvalonStreamTransmitter is
   generic (
+    INIT_CHANNEL : std_logic_vector := "";
+    INIT_EMPTY   : std_logic_vector := "";
+    INIT_LAST    : natural          := 0;
+
     MODEL_ID_NAME              : string                                      := "";
     AVALON_STREAM_DATA_WIDTH   : integer range 1 to 8192                     := 32;
     AVALON_STREAM_WORD_WIDTH   : integer range 1 to AVALON_STREAM_DATA_WIDTH := 32;
     AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 16;
-    AVALON_STREAM_CHANNELS     : integer range 1 to 128                      := 1;
+    AVALON_STREAM_CHANNELS     : integer range 1 to 256                      := 1;
     AVALON_STREAM_ERROR        : integer range 1 to 256                      := 1;
     DEFAULT_DELAY              : time                                        := 1 ns;
     tpd_Clk_Data               : time                                        := DEFAULT_DELAY;
@@ -37,7 +41,8 @@ entity AvalonStreamTransmitter is
     EndOfPacket   : out std_logic                                                                            := '0';
     Empty         : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
 
-    Ready : in std_logic;
+    Ready   : in std_logic;
+    Channel : out std_logic_vector(7 downto 0) := (others => '0');
 
     -- testbench record
     TransRec : inout StreamRecType
@@ -57,16 +62,25 @@ architecture bhv of AvalonStreamTransmitter is
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
   signal PacketRequestCount, PacketTransmitCount : integer := 0;
-  signal PacketWordLength                        : integer := 0;
+   signal TransmitFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType ;
   -- Verification Component Configuration
-  signal ReadyLatency                                    : integer := 0;
-  signal ReadyAllowance                                  : integer := 0;
-  signal ByteOrder                                       : boolean := false; -- big endian is default
-  signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
-  signal PacketTransfer                                  : boolean := false;
-  signal PacketLastWordEmpty                             : integer := 0;
-  signal BeatsPerCycle                                   : integer := 1;
-  signal WordWidth                                       : integer := AVALON_STREAM_DATA_WIDTH;
+  signal ReadyLatency                                    : integer                         := 0;
+  signal ReadyAllowance                                  : integer                         := 0;
+  signal ByteOrder                                       : boolean                         := false; -- big endian is default
+  signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer                         := 0;
+  signal PacketTransfer                                  : boolean                         := false;
+  signal LastOffsetCount                                 : integer                         := 0;
+  signal PacketLastWordEmpty                             : integer                         := 0;
+  signal BeatsPerCycle                                   : integer                         := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH;
+  signal WordWidth                                       : integer                         := AVALON_STREAM_DATA_WIDTH;
+  signal ParamChannel                                    : std_logic_vector(Channel'range) := ifelse(INIT_CHANNEL'length > 0, INIT_CHANNEL, (Channel'range => '0'));
+  signal ParamEmpty                                      : std_logic_vector(Empty'range)   := ifelse(INIT_EMPTY'length > 0, INIT_EMPTY, (Empty'range       => '0'));
+  signal ParamLast                                       : natural                         := INIT_LAST;
+
+  constant DEFAULT_BURST_MODE : StreamFifoBurstModeType := STREAM_BURST_WORD_MODE;
+  signal BurstFifoMode        : StreamFifoBurstModeType := DEFAULT_BURST_MODE;
+  signal BurstFifoByteMode    : boolean                 := (DEFAULT_BURST_MODE = STREAM_BURST_BYTE_MODE);
+
 begin
   ------------------------------------------------------------
   --  Initialize alerts
@@ -80,7 +94,7 @@ begin
     --    ProtocolID       <= NewID("Protocol Error", ID ) ;
     --    DataCheckID      <= NewID("Data Check", ID ) ;
     --BusFailedID  <= NewID("No response", ID);
-    --TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
+    TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
 
     AlertIf(ModelID, AVALON_STREAM_DATA_WIDTH mod AVALON_STREAM_SYMBOL_WIDTH /= 0,
     "AvalonStreamTransmitter: AVALON_STREAM_DATA_WIDTH must be a multiple of AVALON_STREAM_SYMBOL_WIDTH", FAILURE);
@@ -90,12 +104,15 @@ begin
   ---------------------------
 
   TransactionDispatcher : process is
-    variable vData, vDataReverse : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-    variable vSymbolCount        : integer := 0;
+    variable vData                        : std_logic_vector(Data'range);
+    variable Param                        : std_logic_vector(TransRec.ParamToModel'length - 1 downto 0);
+    variable BytesToSend, NumberTransfers : integer;
+    variable PopValid : boolean ;
+    variable Last                         : std_logic;
   begin
     wait for 0 ns;
-    TransRec.TransmitFifo <= NewID("TxTransmitFifo", ModelID, Search => PRIVATE_NAME);
-    TransRec.BurstFifo    <= NewID("TxPacketFifo", ModelID, Search   => PRIVATE_NAME);
+    wait for 0 ns;
+    TransRec.BurstFifo    <= NewID("TxTransmitFifo", ModelID, Search   => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
@@ -120,7 +137,44 @@ begin
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
         when SEND_BURST =>
-          TransmitRequestCount <= TransmitRequestCount + TransRec.IntToModel;
+          Param := UpdateOptions(
+            Param        => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
+            ParamChannel => ParamChannel,
+            ParamEmpty   => ParamEmpty, -- used for empty signal
+            ParamLast    => 1,
+            Count        => ((TransmitRequestCount + 1) - LastOffsetCount)
+            );
+          if BurstFifoByteMode then
+            -- BytesToSend := TransRec.IntToModel ;
+            -- NumberTransfers := integer(ceil(real(BytesToSend) / real(AXI_STREAM_DATA_BYTE_WIDTH))) ;
+            Log(ModelID, "BurstFifoByteMode currently not supported", DEBUG);
+          else
+            NumberTransfers := TransRec.IntToModel;
+          end if;
+          TransmitRequestCount <= TransmitRequestCount + NumberTransfers;
+          Last := Param(0);
+          for i in NumberTransfers - 1 downto 0 loop
+            case BurstFifoMode is
+              when STREAM_BURST_BYTE_MODE =>
+                -- PopWord(TransRec.BurstFifo, PopValid, vData, BytesToSend);
+                -- AlertIfNot(ModelID, PopValid, "BurstFifo Empty during burst transfer", FAILURE);
+
+              when STREAM_BURST_WORD_MODE =>
+                vData := Pop(TransRec.BurstFifo);
+
+              when STREAM_BURST_WORD_PARAM_MODE =>
+                -- (vData, User)                := Pop(TransRec.BurstFifo);
+                -- Param(User'length downto 1) := User;
+
+              when others =>
+                Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
+            end case;
+            --Last            Param(0) := '1' when i = 0 else '0' ;  -- TLast
+            Param(0) := Last when i = 0 else
+            '0'; -- TLast
+            Push(TransmitFifo, vData & Param);
+          end loop;
+          wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
@@ -233,73 +287,73 @@ begin
     wait for 0 ns; -- two delta-cycles to ensure that the scoreboards are initialized
 
     TransmitLoop : loop
-      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransRec.TransmitFifo) and TransmitRequestCount = TransmitDoneCount then
+      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransmitFifo) and TransmitRequestCount = TransmitDoneCount then
         wait on TransmitRequestCount, PacketRequestCount;
       end if;
       if PacketTransfer and (PacketRequestCount > PacketTransmitCount) then
 
-        StartOfPacket <= '1' after tpd_Clk_StartOfPacket;
-        EndOfPacket   <= '0' after tpd_Clk_EndOfPacket;
-        wait for 0 ns;
+        -- StartOfPacket <= '1' after tpd_Clk_StartOfPacket;
+        -- EndOfPacket   <= '0' after tpd_Clk_EndOfPacket;
+        -- wait for 0 ns;
 
-        while not IsEmpty(PacketFifo) and PacketTransfer = true loop
-          DoPrepareTransmitData(Data, TransRec.BurstFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
+        -- while not IsEmpty(PacketFifo) and PacketTransfer = true loop
+        --   DoPrepareTransmitData(Data, TransmitFifo, vEmptyBeats, BurstFifoMode, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
 
-          -- check if is the last word in the packet
-          EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(PacketFifo) else
-            '0';
-          Empty <= std_logic_vector(to_unsigned(PacketLastWordEmpty, Empty'length)) after tpd_Clk_Empty when IsEmpty(PacketFifo) else
-            (others => '0');
+        --   -- check if is the last word in the packet
+        --   EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(PacketFifo) else
+        --     '0';
+        --   Empty <= std_logic_vector(to_unsigned(PacketLastWordEmpty, Empty'length)) after tpd_Clk_Empty when IsEmpty(PacketFifo) else
+        --     (others => '0');
 
-          Log(ModelID,
-          "AvalonStream Packet Transmit." &
-          "  Data: " & to_hxstring(vData) &
-          "  SOP: " & to_string(StartOfPacket) &
-          "  EOP: " & to_string(EndOfPacket) &
-          "  Packet# " & to_string(PacketTransmitCount + 1),
-          DEBUG
-          );
+        --   Log(ModelID,
+        --   "AvalonStream Packet Transmit." &
+        --   "  Data: " & to_hxstring(vData) &
+        --   "  SOP: " & to_string(StartOfPacket) &
+        --   "  EOP: " & to_string(EndOfPacket) &
+        --   "  Packet# " & to_string(PacketTransmitCount + 1),
+        --   DEBUG
+        --   );
 
-          DoAvalonStreamValidHandshake(
-          Clk, Valid, Ready, StartOfNewStream,
-          0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
-          "Packet Valid Handshake Timeout", tperiod_Clk * 100
-          );
+        --   DoAvalonStreamValidHandshake(
+        --   Clk, Valid, Ready, StartOfNewStream,
+        --   0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
+        --   "Packet Valid Handshake Timeout", tperiod_Clk * 100
+        --   );
 
-          -- Nach erstem Wort SOP zurücksetzen
-          StartOfPacket <= '0' after tpd_Clk_StartOfPacket;
+        --   -- Nach erstem Wort SOP zurücksetzen
+        --   StartOfPacket <= '0' after tpd_Clk_StartOfPacket;
 
-          -- Bei EOP fertig
-          if EndOfPacket = '1' then
-            EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
-            Empty       <= (others => '0') after tpd_Clk_Empty;
-            exit;
-          end if;
+        --   -- Bei EOP fertig
+        --   if EndOfPacket = '1' then
+        --     EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
+        --     Empty       <= (others => '0') after tpd_Clk_Empty;
+        --     exit;
+        --   end if;
 
-          wait for 0 ns;
-        end loop;
+        --   wait for 0 ns;
+        -- end loop;
 
-        Increment(PacketTransmitCount);
-        StartOfNewStream <= 1;
-        Valid            <= '0' after tpd_Clk_Valid;
-        Data             <= (Data'range => 'X');
-        wait for 0 ns;
+        -- Increment(PacketTransmitCount);
+        -- StartOfNewStream <= 1;
+        -- Valid            <= '0' after tpd_Clk_Valid;
+        -- Data             <= (Data'range => 'X');
+        -- wait for 0 ns;
       else
         -- Find Transaction
-        if IsEmpty(TransRec.BurstFifo) and not PacketTransfer then
+        if IsEmpty(TransmitFifo) and not PacketTransfer then
           WaitForToggle(TransmitRequestCount);
         end if;
         -- Get Transaction
         -- Data preparation
-        DoPrepareTransmitData(Data, TransRec.BurstFifo, vEmptyBeats, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
-       
+        DoPrepareTransmitData(Data, Channel, Empty, TransmitFifo, vEmptyBeats, BurstFifoMode, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
+
         vData        := (others => 'X');
         vDataReverse := (others => 'X');
 
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
-       
+
         if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream          <= 1;
           Valid                     <= '0' after tpd_Clk_Valid;
@@ -310,7 +364,7 @@ begin
         end if;
         TransmitDoneCount <= TransmitDoneCount + BeatsPerCycle - vEmptyBeats;
         vEmptyBeats := 0;
-         Log(ModelID,
+        Log(ModelID,
         "AvalonStream Transmit." &
         "  Data: " & to_hxstring(Data), INFO
         );

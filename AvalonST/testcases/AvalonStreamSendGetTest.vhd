@@ -3,12 +3,13 @@ architecture AvalonStreamSendGetTest of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
   signal TestDone   : integer_barrier               := 1;
   signal ExpData    : std_logic_vector(31 downto 0) := x"FFFFFFFF";
-  signal ExpData2   : slv_vector(0 to 1)            := (x"10011001", x"F00FF00F");
-  signal CheckData : slv_array_t(0 to 1)(31 downto 0) := (
+  signal CheckData : slv_vector(0 to 1)(31 downto 0) := (
     x"10011001", -- 1st data
     x"F00FF00F"  -- 2nd data
   );
   signal RxData     : std_logic_vector(31 downto 0);
+  signal getWords : integer := 2; -- Number of words to get from the receiver
+  
 begin
 
   ------------------------------------------------------------
@@ -48,13 +49,15 @@ begin
     wait until Reset = '1';
     wait for 0 ns;
 
-   
-    Send(StreamTxRec, CheckData(0));
-    WaitForTransaction(StreamTxRec);
-    wait for 20 ns;
+   for I in 0 to 1 loop 
+      Push( StreamTxRec.BurstFifo, CheckData(I) ) ; 
+    end loop ; 
+    SendBurst(StreamTxRec, 2) ;
+    -- WaitForTransaction(StreamTxRec);
+    -- wait for 20 ns;
 
 
-    SendBurstVector(StreamTxRec, ExpData2);
+    -- SendBurstVector(StreamTxRec, ExpData2);
     WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
     wait;
@@ -64,25 +67,19 @@ begin
     variable rx_data   : std_logic_vector(31 downto 0);
     variable fifoWords : integer := 2;
     variable PopData : std_logic_vector(31 downto 0);
+    variable receiveWords : integer := 2; -- Number of words to receive from the transmitter
   begin
     wait until Reset = '1';
-    ReceiveBurst(StreamRxRec, 1);
-    WaitForTransaction(StreamRxRec);
-    GetBurst(StreamRxRec, fifoWords);
-    for i in 0 to 0 loop
-      PopData := pop(StreamRxRec.BurstFifo);
-      AffirmIf(PopData = CheckData(i), "Data is right");
-    end loop;
- wait for 20 ns;
 
-
-    ReceiveBurst(StreamRxRec, 2);
-    WaitForTransaction(StreamRxRec);
-    GetBurst(StreamRxRec, fifoWords);
-     for i in 0 to fifoWords - 1 loop
-      PopData := pop(StreamRxRec.BurstFifo);
-      AffirmIf(PopData = CheckData(i), "Data is right");
-    end loop;
+for I in 0 to 1 loop 
+      Push( StreamRxRec.BurstFifo, CheckData(I) ) ; 
+    end loop ; 
+    CheckBurst(StreamRxRec, receiveWords);
+    -- GetBurst(StreamRxRec, receiveWords);
+    --  for i in 0 to fifoWords - 1 loop
+    --   PopData  := pop(StreamRxRec.BurstFifo);
+    --   AffirmIf(PopData = CheckData(i), "Data is right");
+    -- end loop;
 
     WaitForClock(StreamRxRec, 2);
     WaitForBarrier(TestDone);
