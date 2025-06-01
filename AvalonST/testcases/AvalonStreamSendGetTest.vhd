@@ -7,7 +7,6 @@ architecture AvalonStreamSendGetTest of AvalonST_TestCtrl is
     x"10011001", -- 1st data
     x"F00FF00F"  -- 2nd data
   );
-  signal RxData     : std_logic_vector(31 downto 0);
   signal getWords : integer := 2; -- Number of words to get from the receiver
   
 begin
@@ -53,10 +52,20 @@ begin
       Push( StreamTxRec.BurstFifo, CheckData(I) ) ; 
     end loop ; 
     SendBurst(StreamTxRec, 2) ;
-    -- WaitForTransaction(StreamTxRec);
-    -- wait for 20 ns;
+    WaitForClock(StreamTxRec, 2);
 
 
+    for I in 0 to 1 loop 
+      Send( StreamTxRec, CheckData(I) ) ; 
+    end loop ; 
+
+      CheckData(0) <= x"11110000";
+      CheckData(1) <= x"00001111";
+      WaitForClock(StreamTxRec, 2);
+
+       for I in 0 to 1 loop 
+      Send( StreamTxRec, CheckData(I) ) ; 
+    end loop ;
     -- SendBurstVector(StreamTxRec, ExpData2);
     WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
@@ -68,20 +77,28 @@ begin
     variable fifoWords : integer := 2;
     variable PopData : std_logic_vector(31 downto 0);
     variable receiveWords : integer := 2; -- Number of words to receive from the transmitter
+      variable RxData     : std_logic_vector(31 downto 0);
+
   begin
     wait until Reset = '1';
 
-for I in 0 to 1 loop 
+    for I in 0 to 1 loop 
       Push( StreamRxRec.BurstFifo, CheckData(I) ) ; 
     end loop ; 
     CheckBurst(StreamRxRec, receiveWords);
-    -- GetBurst(StreamRxRec, receiveWords);
-    --  for i in 0 to fifoWords - 1 loop
-    --   PopData  := pop(StreamRxRec.BurstFifo);
-    --   AffirmIf(PopData = CheckData(i), "Data is right");
-    -- end loop;
+    WaitForClock(StreamRxRec, 2);
+
+ for I in 0 to 1 loop 
+      Get(StreamRxRec, RxData) ;      
+      wait for 0 ns ; 
+      AffirmIfEqual(RxData, CheckData(I), "Data right") ;
+    end loop ; 
 
     WaitForClock(StreamRxRec, 2);
+ for I in 0 to 1 loop 
+     Check(StreamRxRec, CheckData(I));
+    end loop ; 
+
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

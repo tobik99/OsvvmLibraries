@@ -62,7 +62,7 @@ architecture bhv of AvalonStreamTransmitter is
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream                        : integer := 1;
   signal PacketRequestCount, PacketTransmitCount : integer := 0;
-   signal TransmitFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType ;
+  signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   -- Verification Component Configuration
   signal ReadyLatency                                    : integer                         := 0;
   signal ReadyAllowance                                  : integer                         := 0;
@@ -107,12 +107,11 @@ begin
     variable vData                        : std_logic_vector(Data'range);
     variable Param                        : std_logic_vector(TransRec.ParamToModel'length - 1 downto 0);
     variable BytesToSend, NumberTransfers : integer;
-    variable PopValid : boolean ;
+    variable PopValid                     : boolean;
     variable Last                         : std_logic;
   begin
     wait for 0 ns;
-    wait for 0 ns;
-    TransRec.BurstFifo    <= NewID("TxTransmitFifo", ModelID, Search   => PRIVATE_NAME);
+    TransRec.BurstFifo <= NewID("TxTransmitFifo", ModelID, Search => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
       WaitForTransaction(
@@ -123,12 +122,16 @@ begin
 
       case TransRec.Operation is
         when SEND | SEND_ASYNC =>
-          Log(ModelID,
-          "AvalonStream Transmit.", ALWAYS);
-          TransmitRequestCount <= TransmitRequestCount + 1;
-          vData := SafeResize(ModelID, TransRec.DataToModel, vData'length);
-          push(TransRec.BurstFifo, vData);
-          wait for 0 ns;
+          vData := SafeResize(ModelID, TransRec.DataToModel, Data'length);
+          Param := UpdateOptions(
+            Param        => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
+            ParamChannel => ParamChannel,
+            ParamEmpty   => ParamEmpty, -- used for empty signal
+            ParamLast    => 1,
+            Count        => ((TransmitRequestCount + 1) - LastOffsetCount)
+            );
+          Push(TransmitFifo, vData & Param);
+          Increment(TransmitRequestCount);
           if IsBlocking(TransRec.Operation) then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
@@ -174,7 +177,6 @@ begin
             '0'; -- TLast
             Push(TransmitFifo, vData & Param);
           end loop;
-          wait for 0 ns;
           if IsBlocking(TransRec.Operation) then
             wait until TransmitRequestCount = TransmitDoneCount;
           end if;
@@ -347,9 +349,6 @@ begin
         -- Data preparation
         DoPrepareTransmitData(Data, Channel, Empty, TransmitFifo, vEmptyBeats, BurstFifoMode, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
 
-        vData        := (others => 'X');
-        vDataReverse := (others => 'X');
-
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
@@ -357,8 +356,8 @@ begin
         if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream          <= 1;
           Valid                     <= '0' after tpd_Clk_Valid;
-          Data                      <= (others => 'X');
           ReadyAllowanceCyclesCount <= ReadyAllowance;
+          Data                      <= (others => 'X');
         else
           StartOfNewStream <= 0;
         end if;

@@ -22,6 +22,9 @@ package AvalonStreamOptionsPkg is
     PACKET_LAST_WORD_EMPTY, -- Integer
     SET_BURST_MODE,
     GET_BURST_MODE,
+    DEFAULT_CHANNEL,      -- Integer
+    DEFAULT_EMPTY,      -- Integer
+    DEFAULT_LAST,
     WORD_WIDTH           -- Integer
     --DROP_UNDRIVEN,
     --THE_END
