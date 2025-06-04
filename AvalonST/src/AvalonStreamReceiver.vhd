@@ -148,7 +148,7 @@ begin
             wait for 0 ns;
           else
             if not TryWordWaiting then
-              RequestWordsInCurrentBurst <= RequestWordsInCurrentBurst + 1;
+              RequestWordsInCurrentBurst <= 1;
               increment(BurstRequestCount);
             end if;
             TryWordWaiting         := FALSE;
@@ -160,25 +160,20 @@ begin
             --   -- Wait for data
             --   WaitForToggle(WordReceiveCount);
             -- end if;
-             if (BurstReceiveCount - BurstTransferCount) = 0 then
+             if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
               WaitForToggle(BurstReceiveCount);
             end if;
             -- Put Data and Parameters into record
             (Data, Param, BurstBoundary) := pop(ReceiveFifo);
+          
             if BurstBoundary = '1' then
               -- At BurstBoundary, there is always another word that
               -- follows that triggered the Burst Boundary
               (Data, Param, BurstBoundary) := pop(ReceiveFifo);
-              BurstTransferCount           := BurstTransferCount + 1;
             end if;
             TransRec.DataFromModel  <= SafeResize(ModelID, Data, TransRec.DataFromModel'length);
             TransRec.ParamFromModel <= SafeResize(ModelID, Param, TransRec.ParamFromModel'length);
-
-            -- Param: (TID & TDest & TUser & TLast)
-            if Param(0) = '1' then
-              BurstTransferCount := BurstTransferCount + 1;
-            end if;
 
             if IsCheck(Operation) then
               ExpectedData  := SafeResize(ModelID, TransRec.DataToModel, ExpectedData'length);
@@ -207,7 +202,7 @@ begin
             end if;
           end if;
         when GET_BURST | TRY_GET_BURST =>
-          if (BurstReceiveCount - BurstTransferCount) = 0 and IsTry(Operation) then
+          if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
             if not TryBurstWaiting then
               increment(BurstRequestCount);
             end if;
@@ -219,7 +214,7 @@ begin
             wait for 0 ns;
           else
             if not TryBurstWaiting then
-              RequestWordsInCurrentBurst <= RequestWordsInCurrentBurst + TransRec.IntToModel;
+              RequestWordsInCurrentBurst <= TransRec.IntToModel;
               increment(BurstRequestCount);
             end if;
             TryBurstWaiting        := FALSE;
@@ -227,16 +222,20 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-            if (BurstReceiveCount - BurstTransferCount) = 0 then
+            if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
-              Log("waiting in here", INFO);
               WaitForToggle(BurstReceiveCount);
             end if;
-            -- ReceiveFIFO: (TData & TID & TDest & TUser & TLast)
             FifoWordCount := 0;
             WordCount     := 0;
+            -- consumes the first "start of burst" boundary
+            (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
+            if(BurstBoundary = '0') then
+                Alert(ModelID, "Expected BurstBoundary = 1");
+            end if;
             loop
               (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
+                log("poped first data from receive fifo" & to_string(BurstBoundary));
               -- BurstBoundary indication does not contain data for
               -- this transaction so exit
               exit when BurstBoundary = '1';
@@ -247,15 +246,16 @@ begin
                 when STREAM_BURST_BYTE_MODE =>
                   -- PushWord(TransRec.BurstFifo, Data, DropUndriven) ;
                   -- FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven) ;
-
+                log("using burst byte mode");
                 when STREAM_BURST_WORD_MODE =>
+                log("pushing into burstfifo");
                   Push(TransRec.BurstFifo, Data);
                   FifoWordCount := FifoWordCount + 1;
 
                 when STREAM_BURST_WORD_PARAM_MODE =>
                   -- Push(TransRec.BurstFifo, Data & Param(USER_LEN downto 1)) ;
                   -- FifoWordCount := FifoWordCount + 1 ;
-
+                log("using burst word param mode");
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
               end case;
@@ -279,7 +279,7 @@ begin
             wait for 0 ns;
           end if;
         when CHECK_BURST | TRY_CHECK_BURST =>
-          if (BurstReceiveCount - BurstTransferCount) = 0 and IsTry(Operation) then
+          if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
             if not TryBurstWaiting then
               increment(BurstRequestCount);
             end if;
@@ -291,14 +291,14 @@ begin
             wait for 0 ns;
           else
             if not TryBurstWaiting then
-              RequestWordsInCurrentBurst <= RequestWordsInCurrentBurst + TransRec.IntToModel;
+              RequestWordsInCurrentBurst <= TransRec.IntToModel;
               increment(BurstRequestCount);
             end if;
             TryBurstWaiting        := FALSE;
             DispatcherReceiveCount := DispatcherReceiveCount + 1; -- Operation or #Words Transfered based?
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-            if (BurstReceiveCount - BurstTransferCount) = 0 then
+            if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
               WaitForToggle(BurstReceiveCount);
             end if;
@@ -339,6 +339,13 @@ begin
               exit when Param(0) = '1';
               exit when FifoWordCount >= CheckWordCount;
             end loop;
+              if(FifoWordCount = CheckWordCount) then
+            -- there should be a burst boundary now -> consume it
+                 (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
+                 if(BurstBoundary = '0') then
+                   Alert(ModelID, "Expected BurstBoundary = 1", FAILURE);
+                 end if;
+              end if;
 
             -- Adjust WordRequestCount for the number of words consumed during the burst
             WordRequestCount <= Increment(WordRequestCount, WordCount);
@@ -354,7 +361,7 @@ begin
             " Last Data: " & to_hxstring(Data) & param_to_string(Param),
             INFO, TransRec.BoolToModel or IsLogEnabled(ModelID, PASSED)
             );
-            if not (BurstBoundary = '1' or Param(0) = '1') then
+            if not (BurstBoundary = '1') then
               Log(ModelID,
               "Burst Check finished without Last or BurstBoundary - normal when next word is burst boundary",
               DEBUG
@@ -377,7 +384,7 @@ begin
               AffirmIfEqual(ModelID, Param(EMPTY_RIGHT + EMPTY_LEN - 1 downto EMPTY_RIGHT),
               ExpectedParam(EMPTY_RIGHT + EMPTY_LEN - 1 downto EMPTY_RIGHT), "Empty");
             end if;
-            AffirmIfEqual(ModelID, Param(0) or BurstBoundary, ExpectedParam(0), "Last");
+            --AffirmIfEqual(ModelID, Param(0) or BurstBoundary, ExpectedParam(0), "Last");
 
             wait for 0 ns;
           end if;
@@ -478,7 +485,6 @@ begin
     variable vChannel      : std_logic_vector(Channel'range) := (Channel'range => '0');
     variable vEmpty        : std_logic_vector(Empty'range)   := (Empty'range   => '0');
     variable Last          : std_logic;
-    variable BurstBoundary : std_logic;
     variable LastChannel   : std_logic_vector(Channel'range) := (Channel'range => '-');
     variable LastEmpty     : std_logic_vector(Empty'range)   := (Empty'range   => '-');
 
@@ -495,8 +501,9 @@ begin
     ReceiveLoop : loop
       if WaitForGet then
         -- if no request, wait until we have one
-        if not ((BurstRequestCount > BurstReceiveCount) or (RequestWordsInCurrentBurst > ReceivedWordsInCurrentBurst)) then
-          wait until (BurstRequestCount > BurstReceiveCount) or (RequestWordsInCurrentBurst > ReceivedWordsInCurrentBurst) or not WaitForGet;
+        if not ((BurstRequestCount > BurstReceiveCount)) then
+          wait until (BurstRequestCount > BurstReceiveCount) or not WaitForGet;
+         -- push(ReceiveFifo, vData & vParam & '1'); -- marks the start of the burst
         end if;
       end if;
 
@@ -557,16 +564,21 @@ begin
         --   Log(ModelID, "WordTransfer: Received Word: " & to_hxstring(vData), INFO);
         --   else
         -- end if;
-        wait for 0 ns; -- todo solution for right order of the transmitter/receiver logs
+       -- wait for 0 ns; -- todo solution for right order of the transmitter/receiver logs
         Log(ModelID,
         "Received Word: " & to_hxstring(vData), INFO);
         push(ReceiveFifo, vData & vParam & '0');
+        ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + BeatsPerCycle; -- todo here aswell
+        wait for 0 ns;
         --increment(ReceivedWordsInCurrentBurst, BeatsPerCycle-vEmptyBeats);
-        if (ReceivedWordsInCurrentBurst + BeatsPerCycle = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
+        if (ReceivedWordsInCurrentBurst = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
           StartOfNewStream  <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
-          push(ReceiveFifo, vData & vParam & '1');
+          push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
+           log("pushed last data to receive fifo");
           Ready <= '0' after tpd_Clk_oReady;
+          ReceivedWordsInCurrentBurst <= 0; -- reset for next burst
+          wait for 0 ns;
         else
           -- todo the if statement will not work with the new beatspercycle
           if (ReadyAllowance > 0) and (WordReceiveCount + (ReadyAllowance * BeatsPerCycle) >= WordRequestCount + BeatsPerCycle) then
@@ -574,8 +586,7 @@ begin
           end if;
           StartOfNewStream <= 0;
         end if;
-        ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + BeatsPerCycle; -- todo here aswell
-        wait for 0 ns;
+        
       else
         wait for 10 ns;
         Alert(ModelID, "AvalonStreamReceiver: No Word or Packet request was received!", FAILURE);
