@@ -191,6 +191,9 @@ begin
 
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
+            when DEFAULT_CHANNEL =>
+              ParamChannel <= SafeResize(ModelID, TransRec.ParamToModel, ParamChannel'length);
+
             when BEATS_PER_CYCLE =>
               BeatsPerCycle <= TransRec.IntToModel;
               wait for 0 ns;

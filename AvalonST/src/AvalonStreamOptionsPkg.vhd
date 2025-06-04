@@ -26,8 +26,7 @@ package AvalonStreamOptionsPkg is
     DEFAULT_EMPTY,      -- Integer
     DEFAULT_LAST,
     WORD_WIDTH           -- Integer
-    --DROP_UNDRIVEN,
-    --THE_END
+    
   );
   procedure SetAvalonStreamOptions (
     signal TransRec : inout StreamRecType;

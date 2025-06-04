@@ -30,8 +30,8 @@ architecture bhv of AvalonStreamTestHarness is
   signal Valid                    : std_logic;
   signal StartOfPacket            : std_logic;
   signal EndOfPacket              : std_logic;
-  signal Empty                    : std_logic_vector(AvalonStreamDataWidth/AvalonStreamSymbolWidth - 1 downto 0);
-  signal Channel                  : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0);
+  signal Empty                    : std_logic_vector(AvalonStreamDataWidth/AvalonStreamSymbolWidth - 1 downto 0) := (others => '0');
+  signal Channel                  : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0)                            := (others => '0');
   signal StreamRxRec, StreamTxRec : StreamRecType(
   DataToModel (AvalonStreamDataWidth - 1 downto 0),
   DataFromModel (AvalonStreamDataWidth - 1 downto 0),
@@ -39,6 +39,10 @@ architecture bhv of AvalonStreamTestHarness is
   ParamFromModel(AXI_PARAM_WIDTH - 1 downto 0)
   );
   component AvalonST_TestCtrl is
+    generic (
+      CHANNEL_LEN : integer;
+      EMPTY_LEN   : integer
+    );
     port (
       -- Global Signal Interface
       Reset : in std_logic;
@@ -116,6 +120,10 @@ begin
   -- DUT
   -- test
   TestCtrl_1 : entity osvvm_avalonst.AvalonST_TestCtrl
+    generic map(
+      CHANNEL_LEN => Channel'length,
+      EMPTY_LEN   => Empty'length
+    )
     port map(
       -- Globals
       Reset => Reset,

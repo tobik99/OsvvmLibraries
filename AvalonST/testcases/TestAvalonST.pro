@@ -41,4 +41,5 @@ include ../src/build.pro
 include ../testbench/testbench.pro
 
 SetSaveWaves true
-RunTest AvalonStreamSendGetTest.vhd
+RunTest AvalonStream_SetOptions.vhd
+#RunTest AvalonStreamSendGetTest.vhd

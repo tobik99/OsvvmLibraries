@@ -49,6 +49,10 @@ library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
 
 entity AvalonST_TestCtrl is
+  generic (
+    CHANNEL_LEN : integer;
+    EMPTY_LEN   : integer
+  );
   port (
     -- Global Signal Interface
     Reset : in std_logic;
@@ -58,6 +62,10 @@ entity AvalonST_TestCtrl is
     StreamTxRec : inout StreamRecType;
     StreamRxRec : inout StreamRecType
   );
+
+    -- Derive AvalonStream interface properties from the StreamTxRec
+  constant DATA_WIDTH : integer := StreamTxRec.DataToModel'length ; 
+  --constant DATA_BYTES : integer := DATA_WIDTH/8 ; 
 
   alias TxPacketFifo : ScoreboardIdType is StreamTxRec.BurstFifo;
   alias RxPacketFifo : ScoreboardIdType is StreamRxRec.BurstFifo;

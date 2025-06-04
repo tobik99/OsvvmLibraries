@@ -427,6 +427,8 @@ package body AvalonStreamComponentPkg is
         end if;
         Data(WordWidth - 1 downto 0) <= vData(WordWidth - 1 downto 0);
     end case;
+    Channel <= vChannel;
+    Empty <= vEmpty;
     EmptyBeats := vEmptyBeats;
   end procedure;
 end package body AvalonStreamComponentPkg;

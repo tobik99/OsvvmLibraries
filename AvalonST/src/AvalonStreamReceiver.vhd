@@ -104,7 +104,7 @@ begin
   TransactionDispatcher : process is
     alias Operation                         : StreamOperationType is TransRec.Operation;
     variable Data, PopData, ExpectedData    : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    variable Param, PopParam, ExpectedParam : std_logic_vector(PARAM_LENGTH - 1 downto 0);
+    variable Param, PopParam, ExpectedParam : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
 
     variable vWord                           : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
     variable TryWordWaiting, TryBurstWaiting : boolean := false;
@@ -404,7 +404,7 @@ begin
 
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
-
+            
             when PACKET_TRANSFER =>
               PacketTransfer <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -450,6 +450,8 @@ begin
           wait for 0 ns;
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
+             when DEFAULT_CHANNEL =>
+              TransRec.ParamFromModel <= SafeResize(ModelID, ParamChannel, TransRec.ParamFromModel'length) ;
             when BEATS_PER_CYCLE =>
               TransRec.IntFromModel <= BeatsPerCycle;
             when WORD_WIDTH =>
@@ -480,7 +482,7 @@ begin
 
   ReceiveHandler : process
     variable vData         : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
-    variable vParam        : std_logic_vector(PARAM_LENGTH - 1 downto 0);
+    variable vParam        : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
     variable vChannel      : std_logic_vector(Channel'range) := (Channel'range => '0');
     variable vEmpty        : std_logic_vector(Empty'range)   := (Empty'range   => '0');
     variable Last          : std_logic;
@@ -574,7 +576,6 @@ begin
           StartOfNewStream  <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
           push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
-           log("pushed last data to receive fifo");
           Ready <= '0' after tpd_Clk_oReady;
           ReceivedWordsInCurrentBurst <= 0; -- reset for next burst
           wait for 0 ns;
