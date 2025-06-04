@@ -375,7 +375,6 @@ begin
               ParamLast    => 0,
               Count        => 0
               );
-            -- ID, Dest, User, Last
             if CHANNEL_LEN > 0 then
               AffirmIfEqual(ModelID, Param(CHANNEL_RIGHT + CHANNEL_LEN - 1 downto CHANNEL_RIGHT),
               ExpectedParam(CHANNEL_RIGHT + CHANNEL_LEN - 1 downto CHANNEL_RIGHT), "Channel");

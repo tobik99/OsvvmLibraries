@@ -91,6 +91,17 @@ begin
     log("SendBurstVector 13 word burst") ;
     SendBurstVector(StreamTxRec, 
         (X"0000_4001", X"0000_4003", X"0000_4005", X"0000_4007", X"0000_4009") ) ;
+
+
+          -- SendBurstIncrement and CheckBurstIncrement    
+    WaitForClock(StreamTxRec, 1) ; 
+    log("SendBurstIncrement 16 word burst") ;
+    SendBurstIncrement(StreamTxRec, X"0000_5000", 16) ; 
+
+-- SendBurstRandom and CheckBurstRandom    
+    WaitForClock(StreamTxRec, 1) ; 
+    log("SendBurstRandom 24 word burst") ;
+    SendBurstRandom   (StreamTxRec, X"0000_6000", 24) ; 
     -- SendBurstVector(StreamTxRec, ExpData2);
     WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
@@ -144,6 +155,12 @@ begin
     WaitForClock(StreamRxRec, 2);
     CheckBurstVector(StreamRxRec, 
         (X"0000_4001", X"0000_4003", X"0000_4005", X"0000_4007", X"0000_4009") ) ;
+
+      
+
+    CheckBurstIncrement(StreamRxRec, X"0000_5000", 16) ; 
+
+    CheckBurstRandom   (StreamRxRec, X"0000_6000", 24) ; 
 
   WaitForBarrier(TestDone);
   wait;
