@@ -1,26 +1,20 @@
 library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
 
-
 architecture PacketTransport of AvalonST_TestCtrl is
 
-  signal TestDone  : integer_barrier := 1;
-  signal SyncPoint : integer_barrier := 1;
-  signal RxData    : std_logic_vector(31 downto 0);
-  signal TxOptions : AvalonStreamOptionsType;
+  signal scoreboard : ScoreboardIDType;
+  signal TestDone : integer_barrier := 1;
+  signal ExpData : std_logic_vector(31 downto 0) := x"FFFFFFFF";
+  signal SendData : std_logic_vector(31 downto 0) := x"00000000";
+  signal SendDataArray : slv_vector(0 to 1)(31 downto 0) := (
+    x"10011001", -- 1st data
+    x"F00FF00F" -- 2nd data
+  );
+  constant MAX_LEN : integer := maximum(CHANNEL_LEN, EMPTY_LEN);
 
-    signal ExpData : slv_array_t(0 to 9)(31 downto 0) := (
-    "00000000000000000000000000000001", -- 1
-    "00000000000000000000000000000010", -- 2
-    "00000000000000000000000000000011", -- 3
-    "00000000000000000000000000000100", -- 4
-    "00000000000000000000000000000101", -- 5
-    "00000000000000000000000000000110", -- 6
-    "00000000000000000000000000000111", -- 7
-    "00000000000000000000000000001000", -- 8
-    "00000000000000000000000000001001", -- 9
-    "00000000000000000000000000001010"  -- 10
-);
+  signal getWords : integer := 2; -- Number of words to get from the receiver
+
 begin
 
   ------------------------------------------------------------
@@ -38,8 +32,8 @@ begin
     wait until Reset = '1';
     ClearAlerts;
 
-    WaitForBarrier(TestDone, 1000 ns);
-    AlertIf(now >= 1000 ns, "Test finished due to timeout");
+    WaitForBarrier(TestDone, 200 ns);
+    AlertIf(now >= 200 ns, "Test finished due to timeout");
     AlertIf(GetAffirmCount < 1, "Test is not Self-Checking");
 
     EndOfTestReports;
@@ -51,18 +45,30 @@ begin
   -- Transmitter Process
   ------------------------------------------------------------
   transmitter_proc : process
-
+    variable NumBytes : integer := 5;
+    variable CheckDataWord : std_logic_vector(31 downto 0);
+    variable Channel : std_logic_vector(CHANNEL_LEN - 1 downto 0); -- 8
+    variable Empty : std_logic_vector(EMPTY_LEN - 1 downto 0); -- 4
+    variable Param, RxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN + 1 - 1 downto 0);
+    variable Wildcard : std_logic := '0';
   begin
     wait until Reset = '1';
     wait for 0 ns;
     SetAvalonStreamOptions(StreamTxRec, PACKET_TRANSFER, TRUE);
-    SetAvalonStreamOptions(StreamTxRec, PACKET_LAST_WORD_EMPTY, 1); -- use the empty signal for the last word in packet
+    WaitForClock(StreamTxRec, 2);
+    Channel := (others => '0');
+    Channel(2) := '1';
+    Empty := (0 => '1', others => '0');
+    Param := (Channel) & (Empty) & Wildcard;
     wait for 10 ns;
-   
-    SendPacket(StreamTxRec, ExpData, ExpData'length);
+    -- SendBurst and GetBurst    
+    log("Send 5 word burst");
+    CheckDataWord := x"0000_2000";
+    for I in 1 to 5 loop
+      Push(StreamTxRec.BurstFifo, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)));
+    end loop;
+    SendBurst(StreamTxRec, 5, Param);
 
-    wait for 150 ns;
-    --WaitForTransaction(StreamTxRec);
     WaitForBarrier(TestDone);
     wait;
   end process transmitter_proc;
@@ -71,31 +77,38 @@ begin
   -- Receiver Process
   ------------------------------------------------------------
   receiver_proc : process
-    variable Available : boolean := false;
-    variable PacketLength, LastWordEmpty : integer := 0;
-    variable PacketWord : std_logic_vector(31 downto 0);
- 
-    
+    variable RxData : std_logic_vector(31 downto 0);
+    variable NumBytes : integer := 5;
+
+    variable CheckDataWord : std_logic_vector(31 downto 0);
+    variable Channel : std_logic_vector(CHANNEL_LEN - 1 downto 0); -- 8
+    variable Empty : std_logic_vector(EMPTY_LEN - 1 downto 0); -- 4
+    variable Wildcard : std_logic := '0';
+    variable Param, RxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN + 1 - 1 downto 0);
+
   begin
     wait until Reset = '1';
     wait for 0 ns;
     SetAvalonStreamOptions(StreamRxRec, PACKET_TRANSFER, true);
-    wait for 10 ns;
-    --WaitForBarrier(SyncPoint);
+    Channel := (others => '0');
+    Channel(2) := '1';
+    Empty := (0 => '1', others => '0');
 
-    ReceivePacket(StreamRxRec);
-   wait for 150 ns;
-  
-  -- packet can also be checked this way:
-  -- GetPacket(StreamRxRec, PacketLength);
-  --  for i in 0 to PacketLength - 1 loop
-  --   PacketWord := pop(RxPacketFifo);
-  --   Log("PacketWord: " & to_string(PacketWord), INFO, TRUE);
-  --   AffirmIf(PacketWord = ExpData(i), "Data: " & to_string(PacketWord) & " /= Expected: " & to_string(ExpData(i)));
-  --  end loop;
-    CheckPacket(StreamRxRec, ExpData);
-    GetAvalonStreamOptions(StreamRxRec, PACKET_LAST_WORD_EMPTY, LastWordEmpty);
-    AffirmIf(LastWordEmpty = 1, "LastWordEmpty is correctly set to 1");
+    Param := (Channel) & (Empty) & Wildcard;
+    wait for 10 ns;
+
+    log("Get 5 word burst");
+    GetBurst(StreamRxRec, NumBytes, RxParam);
+    AffirmIfEqual(NumBytes, 5, "Receiver: 5 Received");
+    -- check channel and empty parameters
+    AffirmIfEqual(RxParam(Param'length - 1 downto EMPTY_LEN + 1), Channel, "Receiver: Channel Param");
+    AffirmIfEqual(RxParam(EMPTY_LEN downto 1), Empty, "Receiver: Empty Param");
+    CheckDataWord := x"0000_2000";
+    for I in 1 to 5 loop
+      RxData := Pop(StreamRxRec.BurstFifo);
+      AffirmIfEqual(RxData, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)), "RxData");
+    end loop;
+
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

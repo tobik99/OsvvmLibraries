@@ -118,7 +118,7 @@ package AvalonStreamComponentPkg is
     signal StartOfPacket    : in std_logic;
     signal EndOfPacket      : in std_logic;
     signal Data             : in std_logic_vector;
-    signal TransRec         : inout StreamRecType;
+    signal ScoreBoard : inout ScoreboardIdType;
     signal WordsInPacket    : inout integer;
     constant BeatsPerCycle  : in integer;
     constant ByteOrder      : in boolean;
@@ -208,7 +208,7 @@ package body AvalonStreamComponentPkg is
         Valid <= '1' after tpd_Clk_Valid;
         if Ready /= '1' then
           WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-          Valid <= '0'; -- ggf. je nach Verhalten überdenken
+          Valid <= '0';
         end if;
       end if;
     end if;
@@ -285,7 +285,7 @@ package body AvalonStreamComponentPkg is
     signal StartOfPacket    : in std_logic;
     signal EndOfPacket      : in std_logic;
     signal Data             : in std_logic_vector;
-    signal TransRec         : inout StreamRecType;
+    signal ScoreBoard : inout ScoreboardIdType;
     signal WordsInPacket    : inout integer;
     constant BeatsPerCycle  : in integer;
     constant ByteOrder      : in boolean;
@@ -296,7 +296,10 @@ package body AvalonStreamComponentPkg is
     constant TimeOutMessage : in string         := "";
     constant TimeOutPeriod  : in time           := - 1 sec
   ) is
-    variable vData : std_logic_vector(Data'range) := (others => 'X');
+    variable vData         : std_logic_vector(Data'range):= (others => 'U');
+    -- variable vParam        : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
+    -- variable vChannel      : std_logic_vector(Channel'range) := (Channel'range => '0');
+    -- variable vEmpty        : std_logic_vector(Empty'range)   := (Empty'range   => '0');
   begin
     WordsInPacket <= 0;
     loop
@@ -309,12 +312,14 @@ package body AvalonStreamComponentPkg is
       end if;
       -- start of packet
       vData := Data;
+     
       if ByteOrder then
         ReverseSymbolOrder(vData, SymbolWidth, Data'length);
       end if;
+      
       for i in 0 to BeatsPerCycle - 1 loop
         push(
-        TransRec.BurstFifo,
+        ScoreBoard,
         vData((i + 1) * WordWidth - 1 downto i * WordWidth)
         );
       end loop;
@@ -339,7 +344,7 @@ package body AvalonStreamComponentPkg is
         end if;
         for i in 0 to BeatsPerCycle - 1 loop
           push(
-          TransRec.BurstFifo,
+          ScoreBoard,
           vData((i + 1) * WordWidth - 1 downto i * WordWidth)
           );
         end loop;
@@ -353,6 +358,8 @@ package body AvalonStreamComponentPkg is
     end loop;
     Ready <= '0' after tpd_Clk_Ready;
     -- packet received
+    -- push burst boundary
+    push(         ScoreBoard,          vData          );
     wait for 0 ns;
   end procedure;
   -------------------------------------------------------------

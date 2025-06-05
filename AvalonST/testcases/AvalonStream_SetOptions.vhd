@@ -159,13 +159,7 @@ begin
     Channel(2) := '1'; 
     Empty   := (others => '0');
 
-   -- SetAvalonStreamOptions(StreamRxRec, DEFAULT_CHANNEL, Channel);
-    -- SetAxiStreamOptions(StreamRxRec, DEFAULT_DEST, Dest + 2) ;
-    -- SetAxiStreamOptions(StreamRxRec, DEFAULT_USER, User + 1) ;
-    -- Print log with lengths of Channel, Empty, and Param
-    Log("Channel length: " & integer'image(Channel'length));
-    Log("Empty length: " & integer'image(Empty'length));
-    Log("Param length: " & integer'image(Param'length));
+
     Param := (Channel) & (Empty) & Wildcard;
     for i in 1 to 1 loop
       case i is

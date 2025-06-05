@@ -193,25 +193,6 @@ begin
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when DEFAULT_CHANNEL =>
               ParamChannel <= SafeResize(ModelID, TransRec.ParamToModel, ParamChannel'length);
-
-            when BEATS_PER_CYCLE =>
-              BeatsPerCycle <= TransRec.IntToModel;
-              wait for 0 ns;
-              Log(ModelID, "BeatsPerCycle = " & integer'image(BeatsPerCycle), INFO);
-              if (BeatsPerCycle < 1) then
-                Alert(ModelID, "BeatsPerCycle must be greater than or equal to 1", FAILURE);
-              elsif (BeatsPerCycle > AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH) then
-                Alert(ModelID, "BeatsPerCycle must be less than or equal to AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH", FAILURE);
-              end if;
-            when WORD_WIDTH =>
-              WordWidth <= TransRec.IntToModel;
-              wait for 0 ns;
-              if (WordWidth < 1) then
-                Alert(ModelID, "WordWidth must be greater than or equal to 1", FAILURE);
-              end if;
-              if (WordWidth > AVALON_STREAM_DATA_WIDTH) then
-                Alert(ModelID, "WordWidth must be less than or equal to AVALON_STREAM_DATA_WIDTH", FAILURE);
-              end if;
             when PACKET_TRANSFER =>
               PacketTransfer <= TransRec.BoolToModel;
               wait for 0 ns;
@@ -230,13 +211,6 @@ begin
                 Log(ModelID, "Byte Order set to Big Endian", INFO, TRUE);
               end if;
 
-            when PACKET_LAST_WORD_EMPTY =>
-              if TransRec.IntToModel <= AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH then
-                PacketLastWordEmpty    <= TransRec.IntToModel;
-              else
-                Alert(ModelID, "PacketLastWordEmpty must be less than or equal to AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH", WARNING);
-                PacketLastWordEmpty <= AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
-              end if;
             when READY_ALLOWANCE =>
               if (TransRec.IntToModel < ReadyLatency) then
                 AlertIf(ModelID, TransRec.IntToModel < ReadyLatency,
@@ -256,14 +230,10 @@ begin
           wait for 0 ns;
         when GET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
-            when BEATS_PER_CYCLE =>
-              TransRec.IntFromModel <= BeatsPerCycle;
             when PACKET_TRANSFER =>
               TransRec.BoolFromModel <= PacketTransfer;
             when BYTE_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
-            when PACKET_LAST_WORD_EMPTY =>
-              TransRec.IntFromModel <= PacketLastWordEmpty;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;
             when READY_LATENCY =>
@@ -292,57 +262,51 @@ begin
     wait for 0 ns; -- two delta-cycles to ensure that the scoreboards are initialized
 
     TransmitLoop : loop
-      if PacketRequestCount = PacketTransmitCount and IsEmpty(TransmitFifo) and TransmitRequestCount = TransmitDoneCount then
-        wait on TransmitRequestCount, PacketRequestCount;
+      if IsEmpty(TransmitFifo) and TransmitRequestCount <= TransmitDoneCount then
+        wait on TransmitRequestCount;
       end if;
-      if PacketTransfer and (PacketRequestCount > PacketTransmitCount) then
+      if PacketTransfer and (TransmitRequestCount > TransmitDoneCount) then
 
-        -- StartOfPacket <= '1' after tpd_Clk_StartOfPacket;
-        -- EndOfPacket   <= '0' after tpd_Clk_EndOfPacket;
-        -- wait for 0 ns;
+        StartOfPacket <= '1' after tpd_Clk_StartOfPacket;
+        EndOfPacket   <= '0' after tpd_Clk_EndOfPacket;
+        wait for 0 ns;
+        while not IsEmpty(TransmitFifo) and PacketTransfer = true loop
+          DoPrepareTransmitData(Data, Channel, Empty, TransmitFifo, vEmptyBeats, BurstFifoMode, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
+          -- check if is the last word in the packet
+          EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(TransmitFifo) else
+            '0';
 
-        -- while not IsEmpty(PacketFifo) and PacketTransfer = true loop
-        --   DoPrepareTransmitData(Data, TransmitFifo, vEmptyBeats, BurstFifoMode, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
+          Log(ModelID,
+          "AvalonStream Packet Transmit." &
+          "  Data: " & to_hxstring(vData) &
+          "  SOP: " & to_string(StartOfPacket) &
+          "  EOP: " & to_string(EndOfPacket) &
+          "  Packet# " & to_string(PacketTransmitCount + 1),
+          DEBUG
+          );
+          DoAvalonStreamValidHandshake(
+          Clk, Valid, Ready, StartOfNewStream,
+          0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
+          "Packet Valid Handshake Timeout", tperiod_Clk * 100
+          );
 
-        --   -- check if is the last word in the packet
-        --   EndOfPacket <= '1' after tpd_Clk_EndOfPacket when IsEmpty(PacketFifo) else
-        --     '0';
-        --   Empty <= std_logic_vector(to_unsigned(PacketLastWordEmpty, Empty'length)) after tpd_Clk_Empty when IsEmpty(PacketFifo) else
-        --     (others => '0');
+          -- Nach erstem Wort SOP zurücksetzen
+          StartOfPacket     <= '0' after tpd_Clk_StartOfPacket;
+          TransmitDoneCount <= TransmitDoneCount + BeatsPerCycle;
+          -- Bei EOP fertig
+          if EndOfPacket = '1' then
+            EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
+            Empty       <= (others => '0') after tpd_Clk_Empty;
+            exit;
+          end if;
 
-        --   Log(ModelID,
-        --   "AvalonStream Packet Transmit." &
-        --   "  Data: " & to_hxstring(vData) &
-        --   "  SOP: " & to_string(StartOfPacket) &
-        --   "  EOP: " & to_string(EndOfPacket) &
-        --   "  Packet# " & to_string(PacketTransmitCount + 1),
-        --   DEBUG
-        --   );
+          wait for 0 ns;
 
-        --   DoAvalonStreamValidHandshake(
-        --   Clk, Valid, Ready, StartOfNewStream,
-        --   0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
-        --   "Packet Valid Handshake Timeout", tperiod_Clk * 100
-        --   );
-
-        --   -- Nach erstem Wort SOP zurücksetzen
-        --   StartOfPacket <= '0' after tpd_Clk_StartOfPacket;
-
-        --   -- Bei EOP fertig
-        --   if EndOfPacket = '1' then
-        --     EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
-        --     Empty       <= (others => '0') after tpd_Clk_Empty;
-        --     exit;
-        --   end if;
-
-        --   wait for 0 ns;
-        -- end loop;
-
-        -- Increment(PacketTransmitCount);
-        -- StartOfNewStream <= 1;
-        -- Valid            <= '0' after tpd_Clk_Valid;
-        -- Data             <= (Data'range => 'X');
-        -- wait for 0 ns;
+        end loop;
+        StartOfNewStream <= 1;
+        Valid            <= '0' after tpd_Clk_Valid;
+        Data             <= (Data'range => 'X');
+        wait for 0 ns;
       else
         -- Find Transaction
         if IsEmpty(TransmitFifo) and not PacketTransfer then

@@ -102,7 +102,7 @@ begin
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
       AVALON_STREAM_WORD_WIDTH   => AvalonStreamWordWidth,
       DEFAULT_DELAY              => 1 ns,
-      tpd_Clk_oReady             => 1 ns
+      tpd_Clk_Ready             => 1 ns
     )
     port map(
       Clk           => Clk,
