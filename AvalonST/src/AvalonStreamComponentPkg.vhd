@@ -181,12 +181,11 @@ package body AvalonStreamComponentPkg is
   begin
     if Ready = '1' then
       Valid <= '1' after tpd_Clk_Valid;
-
+    
     elsif StartOfNewStream = 1 then
       ReadyAllowanceCyclesCount <= ReadyAllowance;
-
+      WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
       if ReadyLatency > 0 then
-        WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
         for i in 1 to ReadyLatency-1 loop
           wait until Clk = '1';
         end loop;
@@ -234,17 +233,19 @@ package body AvalonStreamComponentPkg is
     constant TimeOutMessage : in string := "";
     constant TimeOutPeriod : in time := -1 sec
   ) is
+    variable UseReadyAllowance : boolean := false;
   begin
-    if StartOfNewStream = 1 then
-      WordReceiveCount <= 0;
-    end if;
+    -- if(WordRequestCount - ReadyAllowance > 0) then
+    --   UseReadyAllowance := true;
+    -- end if;
     if ReadyBeforeValid then
-      Ready <= transport '1' after tpd_Clk_Ready;
+      log("setting ready to 1");
+      Ready <= '1' after tpd_Clk_Ready;
     else
-      Ready <= transport '0' after tpd_Clk_Ready;
+      Ready <= '0' after tpd_Clk_Ready;
     end if;
     StartOfNewStream <= 0;
-    if (ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) and StartOfNewStream = 0 then
+    if (ReadyAllowance > 0) and (WordRequestCount - ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
       Ready <= '0' after tpd_Clk_Ready;
     end if;
 

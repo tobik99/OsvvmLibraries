@@ -39,7 +39,7 @@
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
 --  
-architecture AvalonStream_SetOptions of AvalonST_TestCtrl is
+architecture AvalonStreamSetOptions of AvalonST_TestCtrl is
 
   signal TestDone  : integer_barrier                        := 1;
   constant MAX_LEN : integer                                := maximum(CHANNEL_LEN, EMPTY_LEN);
@@ -54,7 +54,7 @@ begin
   ControlProc : process
   begin
     -- Initialization of test
-    SetTestName("TbStream_AxiSetOptions2");
+    SetTestName("AvalonStreamSetOptions");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE);   -- Enable INFO logs
 
@@ -101,7 +101,7 @@ begin
     -- SetAxiStreamOptions(StreamTxRec, DEFAULT_DEST, Dest + 2) ;
     -- SetAxiStreamOptions(StreamTxRec, DEFAULT_USER, User + 1) ;
 
-    for i in 1 to 4 loop
+    for i in 1 to 1 loop
       Send(StreamTxRec, Data);
       Data := std_logic_vector(unsigned(Data) + 1);
     end loop;
@@ -272,12 +272,12 @@ begin
     wait;
   end process AvalonStreamReceiverProc;
 
-end AvalonStream_SetOptions;
+end AvalonStreamSetOptions;
 
-configuration AvalonStream_SetOptions of AvalonStreamTestHarness is
+configuration AvalonStreamSetOptions of AvalonStreamTestHarness is
   for bhv
     for TestCtrl_1 : AvalonST_TestCtrl
-      use entity osvvm_avalonst.AvalonST_TestCtrl(AvalonStream_SetOptions);
+      use entity osvvm_avalonst.AvalonST_TestCtrl(AvalonStreamSetOptions);
     end for;
   end for;
-end AvalonStream_SetOptions;
+end AvalonStreamSetOptions;

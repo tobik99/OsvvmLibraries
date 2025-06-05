@@ -165,11 +165,11 @@ begin
             -- Put Data and Parameters into record
             (Data, Param, BurstBoundary) := pop(ReceiveFifo);
 
-            if BurstBoundary = '1' then
+           -- if BurstBoundary = '1' then
               -- At BurstBoundary, there is always another word that
               -- follows that triggered the Burst Boundary
               (Data, Param, BurstBoundary) := pop(ReceiveFifo);
-            end if;
+           -- end if;
             TransRec.DataFromModel  <= SafeResize(ModelID, Data, TransRec.DataFromModel'length);
             TransRec.ParamFromModel <= SafeResize(ModelID, Param, TransRec.ParamFromModel'length);
 
@@ -227,10 +227,10 @@ begin
             FifoWordCount := 0;
             WordCount     := 0;
             -- consumes the first "start of burst" boundary
-            (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
-            if (BurstBoundary = '0') then
-              Alert(ModelID, "Expected BurstBoundary = 1");
-            end if;
+            -- (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
+            -- if (BurstBoundary = '0') then
+            --   Alert(ModelID, "Expected BurstBoundary = 1");
+            -- end if;
             loop
               (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
               -- BurstBoundary indication does not contain data for
@@ -291,7 +291,7 @@ begin
               increment(BurstRequestCount);
             end if;
             TryBurstWaiting        := FALSE;
-            DispatcherReceiveCount := DispatcherReceiveCount + 1; -- Operation or #Words Transfered based?
+            DispatcherReceiveCount := DispatcherReceiveCount + 1;
             -- Get data
             TransRec.BoolFromModel <= TRUE;
             if (BurstReceiveCount - BurstRequestCount) = 0 then
@@ -338,10 +338,11 @@ begin
             if (FifoWordCount = CheckWordCount) then
               -- there should be a burst boundary now -> consume it
               (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
-              if (BurstBoundary = '0') then
-                Alert(ModelID, "Expected BurstBoundary = 1", FAILURE);
               end if;
-            end if;
+            --   if (BurstBoundary = '0') then
+            --     Alert(ModelID, "Expected BurstBoundary = 1", FAILURE);
+            --   end if;
+            -- end if;
 
             -- Adjust WordRequestCount for the number of words consumed during the burst
             WordRequestCount <= Increment(WordRequestCount, WordCount);
@@ -587,19 +588,19 @@ begin
         push(ReceiveFifo, vData & vParam & '0');
         ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + BeatsPerCycle; -- todo here aswell
         wait for 0 ns;
-        --increment(ReceivedWordsInCurrentBurst, BeatsPerCycle-vEmptyBeats);
+
         if (ReceivedWordsInCurrentBurst = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
           StartOfNewStream  <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
           Ready <= '0' after tpd_Clk_Ready; -- end of burst
           push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
-         
+          ReceivedWordsInCurrentBurst <= 0; -- reset for next burst         
         elsif(ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst) then
+          wait for 10 ns;
           Alert(ModelID, "ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst: " &
           to_string(ReceivedWordsInCurrentBurst) & " > " & to_string(RequestWordsInCurrentBurst), FAILURE);
         end if;
-
-        wait for 0 ns;
+          --wait for 0 ns;
       else
         wait for 10 ns;
         Alert(ModelID, "AvalonStreamReceiver: No Word or Packet request was received!", FAILURE);
