@@ -60,10 +60,7 @@ architecture bhv of AvalonStreamReceiver is
   signal DataCheckID                            : AlertLogIDType;
   signal WordRequestCount, WordReceiveCount     : integer := 0;
   signal BurstRequestCount, BurstReceiveCount   : integer := 0;
-  signal PacketRequestCount, PacketReceiveCount : integer := 0;
-  signal PacketWordLength                       : integer := 0;
   signal StartOfNewStream                       : integer := 1;
-  signal PacketLastWordEmpty                    : integer := 0;
   signal TimeOutPeriod                          : time    := 0 sec; -- 0 sec means no timeout TODO add to options
 
   signal ReceiveFifo                                             : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
@@ -230,7 +227,7 @@ begin
             FifoWordCount := 0;
             WordCount     := 0;
             -- consumes the first "start of burst" boundary
-            --(PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
+            (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
             if (BurstBoundary = '0') then
               Alert(ModelID, "Expected BurstBoundary = 1");
             end if;
@@ -478,12 +475,8 @@ begin
     variable vParam      : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others        => '0');
     variable vChannel    : std_logic_vector(Channel'range)             := (Channel'range => '0');
     variable vEmpty      : std_logic_vector(Empty'range)               := (Empty'range   => '0');
-    variable Last        : std_logic;
-    variable LastChannel : std_logic_vector(Channel'range) := (Channel'range => '-');
-    variable LastEmpty   : std_logic_vector(Empty'range)   := (Empty'range   => '-');
 
-    variable vDataWord        : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
-    variable ReadyBeforeValid : integer := 1;
+    variable ReadyBeforeValid : boolean := TRUE;
     variable ReadyDelayCycles : integer := 0;
   begin
     -- Initialize
@@ -559,10 +552,11 @@ begin
         Clk              => Clk,
         Valid            => Valid,
         Ready            => Ready,
-        WordRequestCount => WordRequestCount,
-        WordReceiveCount => WordReceiveCount,
+        StartOfNewStream => StartOfNewStream,
+        WordRequestCount => RequestWordsInCurrentBurst,
+        WordReceiveCount => ReceivedWordsInCurrentBurst,
         ReadyAllowance   => ReadyAllowance,
-        ReadyBeforeValid => ReadyBeforeValid = 1,
+        ReadyBeforeValid => ReadyBeforeValid,
         ReadyDelayCycles => ReadyDelayCycles * tperiod_Clk,
         tpd_Clk_Ready    => tpd_Clk_Ready,
         AlertLogID       => ModelID
@@ -597,18 +591,15 @@ begin
         if (ReceivedWordsInCurrentBurst = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
           StartOfNewStream  <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
+          Ready <= '0' after tpd_Clk_Ready; -- end of burst
           push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
-          Ready                       <= '0' after tpd_Clk_Ready;
-          ReceivedWordsInCurrentBurst <= 0; -- reset for next burst
-          wait for 0 ns;
-        else
-          -- todo the if statement will not work with the new beatspercycle
-          if (ReadyAllowance > 0) and (WordReceiveCount + (ReadyAllowance * BeatsPerCycle) >= WordRequestCount + BeatsPerCycle) then
-            Ready <= '0' after tpd_Clk_Ready;
-          end if;
-          StartOfNewStream <= 0;
+         
+        elsif(ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst) then
+          Alert(ModelID, "ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst: " &
+          to_string(ReceivedWordsInCurrentBurst) & " > " & to_string(RequestWordsInCurrentBurst), FAILURE);
         end if;
 
+        wait for 0 ns;
       else
         wait for 10 ns;
         Alert(ModelID, "AvalonStreamReceiver: No Word or Packet request was received!", FAILURE);

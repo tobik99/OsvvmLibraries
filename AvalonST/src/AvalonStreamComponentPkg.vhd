@@ -54,24 +54,24 @@ context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
 package AvalonStreamComponentPkg is
   component AvalonStreamTransmitter is
     generic (
-      MODEL_ID_NAME            : string  := "";
+      MODEL_ID_NAME : string := "";
       AVALON_STREAM_DATA_WIDTH : integer := 8;
-      DEFAULT_DELAY            : time    := 1 ns;
-      tpd_Clk_Data             : time    := DEFAULT_DELAY;
-      tpd_Clk_Valid            : time    := DEFAULT_DELAY;
-      tpd_Clk_StartOfPacket    : time    := DEFAULT_DELAY;
-      tpd_Clk_EndOfPacket      : time    := DEFAULT_DELAY;
-      tpd_Clk_Empty            : time    := DEFAULT_DELAY
+      DEFAULT_DELAY : time := 1 ns;
+      tpd_Clk_Data : time := DEFAULT_DELAY;
+      tpd_Clk_Valid : time := DEFAULT_DELAY;
+      tpd_Clk_StartOfPacket : time := DEFAULT_DELAY;
+      tpd_Clk_EndOfPacket : time := DEFAULT_DELAY;
+      tpd_Clk_Empty : time := DEFAULT_DELAY
     );
     port (
-      Clk   : in std_logic;
+      Clk : in std_logic;
       Reset : in std_logic;
       -- DUT signals
-      Valid         : out std_logic := '0';
-      Data          : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
+      Valid : out std_logic := '0';
+      Data : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
       StartOfPacket : out std_logic := '0';
-      EndOfPacket   : out std_logic := '0';
-      Empty         : out std_logic := '0';
+      EndOfPacket : out std_logic := '0';
+      Empty : out std_logic := '0';
       --Empty : std_logic_vector(AVALON_STREAM_DATA_WIDTH - )
       Ready : in std_logic;
 
@@ -81,80 +81,81 @@ package AvalonStreamComponentPkg is
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
-    signal Clk                       : in std_logic;
-    signal Valid                     : out std_logic;
-    signal Ready                     : in std_logic;
-    signal StartOfNewStream          : in integer;
-    constant ReadyLatency            : in integer;
-    constant ReadyAllowance          : in integer;
+    signal Clk : in std_logic;
+    signal Valid : out std_logic;
+    signal Ready : in std_logic;
+    signal StartOfNewStream : in integer;
+    constant ReadyLatency : in integer;
+    constant ReadyAllowance : in integer;
     signal ReadyAllowanceCyclesCount : inout integer;
-    constant tpd_Clk_Valid           : in time;
-    constant AlertLogID              : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage          : in string         := "";
-    constant TimeOutPeriod           : in time           := - 1 sec
+    constant tpd_Clk_Valid : in time;
+    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string := "";
+    constant TimeOutPeriod : in time := -1 sec
   );
 
   ------------------------------------------------------------
   procedure DoAvalonStreamReadyHandshake (
     ------------------------------------------------------------
-    signal Clk                : in std_logic;
-    signal Valid              : in std_logic;
-    signal Ready              : inout std_logic;
+    signal Clk : in std_logic;
+    signal Valid : in std_logic;
+    signal Ready : inout std_logic;
+    signal StartOfNewStream : inout integer;
     constant WordRequestCount : in integer;
-    constant WordReceiveCount : in integer;
-    constant ReadyAllowance   : in integer;
+    signal WordReceiveCount : inout integer;
+    constant ReadyAllowance : in integer;
     constant ReadyBeforeValid : in boolean;
     constant ReadyDelayCycles : in time;
-    constant tpd_Clk_Ready    : in time;
-    constant AlertLogID       : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage   : in string         := "";
-    constant TimeOutPeriod    : in time           := - 1 sec
+    constant tpd_Clk_Ready : in time;
+    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string := "";
+    constant TimeOutPeriod : in time := -1 sec
   );
 
   procedure DoAvalonStreamPacketReadyHandshake (
-    signal Clk              : in std_logic;
-    signal Valid            : in std_logic;
-    signal Ready            : inout std_logic;
-    signal StartOfPacket    : in std_logic;
-    signal EndOfPacket      : in std_logic;
-    signal Data             : in std_logic_vector;
+    signal Clk : in std_logic;
+    signal Valid : in std_logic;
+    signal Ready : inout std_logic;
+    signal StartOfPacket : in std_logic;
+    signal EndOfPacket : in std_logic;
+    signal Data : in std_logic_vector;
     signal ScoreBoard : inout ScoreboardIdType;
-    signal WordsInPacket    : inout integer;
-    constant BeatsPerCycle  : in integer;
-    constant ByteOrder      : in boolean;
-    constant WordWidth      : in integer;
-    constant SymbolWidth    : in integer;
-    constant tpd_Clk_Ready  : in time;
-    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage : in string         := "";
-    constant TimeOutPeriod  : in time           := - 1 sec
+    signal WordsInPacket : inout integer;
+    constant BeatsPerCycle : in integer;
+    constant ByteOrder : in boolean;
+    constant WordWidth : in integer;
+    constant SymbolWidth : in integer;
+    constant tpd_Clk_Ready : in time;
+    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string := "";
+    constant TimeOutPeriod : in time := -1 sec
   );
 
   procedure DoPrepareTransmitData (
-    signal Data            : out std_logic_vector;
-    signal Channel         : out std_logic_vector;
-    signal Empty           : out std_logic_vector;
-    signal Scoreboard      : inout ScoreboardIdType;
-    variable EmptyBeats    : inout integer;
+    signal Data : out std_logic_vector;
+    signal Channel : out std_logic_vector;
+    signal Empty : out std_logic_vector;
+    signal Scoreboard : inout ScoreboardIdType;
+    variable EmptyBeats : inout integer;
     constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
-    constant ByteOrder     : in boolean;
-    constant WordWidth     : in integer;
-    constant SymbolWidth   : in integer
+    constant ByteOrder : in boolean;
+    constant WordWidth : in integer;
+    constant SymbolWidth : in integer
   );
 
   procedure WaitForReady (
-    signal Clk          : in std_logic;
-    signal Ready        : in std_logic;
-    constant TimeOut    : in time;
+    signal Clk : in std_logic;
+    signal Ready : in std_logic;
+    constant TimeOut : in time;
     constant AlertLogID : in AlertLogIDType;
-    constant Msg        : in string
+    constant Msg : in string
   );
 
   procedure ReverseSymbolOrder (
-    variable Data        : inout std_logic_vector;
+    variable Data : inout std_logic_vector;
     constant SymbolWidth : in integer;
-    constant TotalWidth  : in integer
+    constant TotalWidth : in integer
   );
 
 end package AvalonStreamComponentPkg;
@@ -165,17 +166,17 @@ end package AvalonStreamComponentPkg;
 package body AvalonStreamComponentPkg is
 
   procedure DoAvalonStreamValidHandshake (
-    signal Clk                       : in std_logic;
-    signal Valid                     : out std_logic;
-    signal Ready                     : in std_logic;
-    signal StartOfNewStream          : in integer;
-    constant ReadyLatency            : in integer;
-    constant ReadyAllowance          : in integer;
+    signal Clk : in std_logic;
+    signal Valid : out std_logic;
+    signal Ready : in std_logic;
+    signal StartOfNewStream : in integer;
+    constant ReadyLatency : in integer;
+    constant ReadyAllowance : in integer;
     signal ReadyAllowanceCyclesCount : inout integer;
-    constant tpd_Clk_Valid           : in time;
-    constant AlertLogID              : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage          : in string         := "";
-    constant TimeOutPeriod           : in time           := - 1 sec
+    constant tpd_Clk_Valid : in time;
+    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string := "";
+    constant TimeOutPeriod : in time := -1 sec
   ) is
   begin
     if Ready = '1' then
@@ -186,7 +187,7 @@ package body AvalonStreamComponentPkg is
 
       if ReadyLatency > 0 then
         WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-        for i in 1 to ReadyLatency loop
+        for i in 1 to ReadyLatency-1 loop
           wait until Clk = '1';
         end loop;
       end if;
@@ -197,7 +198,7 @@ package body AvalonStreamComponentPkg is
       if ReadyAllowance > ReadyLatency then
         if Ready = '0' and ReadyAllowanceCyclesCount > 0 then
           ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
-          Valid                     <= '1' after tpd_Clk_Valid;
+          Valid <= '1' after tpd_Clk_Valid;
         elsif Ready = '0' then
           Valid <= '0' after tpd_Clk_Valid;
         else
@@ -219,27 +220,31 @@ package body AvalonStreamComponentPkg is
   ------------------------------------------------------------
   procedure DoAvalonStreamReadyHandshake (
     ------------------------------------------------------------
-    signal Clk                : in std_logic;
-    signal Valid              : in std_logic;
-    signal Ready              : inout std_logic;
+    signal Clk : in std_logic;
+    signal Valid : in std_logic;
+    signal Ready : inout std_logic;
+    signal StartOfNewStream : inout integer;
     constant WordRequestCount : in integer;
-    constant WordReceiveCount : in integer;
-    constant ReadyAllowance   : in integer;
+    signal WordReceiveCount : inout integer;
+    constant ReadyAllowance : in integer;
     constant ReadyBeforeValid : in boolean;
     constant ReadyDelayCycles : in time;
-    constant tpd_Clk_Ready    : in time;
-    constant AlertLogID       : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage   : in string         := "";
-    constant TimeOutPeriod    : in time           := - 1 sec
+    constant tpd_Clk_Ready : in time;
+    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string := "";
+    constant TimeOutPeriod : in time := -1 sec
   ) is
   begin
-
-    if ReadyBeforeValid then
-      Ready <= transport '1' after ReadyDelayCycles + tpd_Clk_Ready;
-    else
-      Ready <= transport '0' after ReadyDelayCycles + tpd_Clk_Ready;
+    if StartOfNewStream = 1 then
+      WordReceiveCount <= 0;
     end if;
-    if (ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
+    if ReadyBeforeValid then
+      Ready <= transport '1' after tpd_Clk_Ready;
+    else
+      Ready <= transport '0' after tpd_Clk_Ready;
+    end if;
+    StartOfNewStream <= 0;
+    if (ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) and StartOfNewStream = 0 then
       Ready <= '0' after tpd_Clk_Ready;
     end if;
 
@@ -247,6 +252,7 @@ package body AvalonStreamComponentPkg is
     if TimeOutPeriod > 0 sec then
       wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
     else
+      log("waiting for valid to be 1", INFO);
       wait on Clk until Clk = '1' and Valid = '1';
     end if;
 
@@ -255,7 +261,7 @@ package body AvalonStreamComponentPkg is
         AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
       else
         if not ReadyBeforeValid then
-          Ready <= '1' after ReadyDelayCycles + tpd_Clk_Ready;
+          Ready <= '1' after tpd_Clk_Ready;
         end if;
         -- If ready not signaled yet, find ready at a rising edge of clk
         if Ready /= '1' then
@@ -268,35 +274,31 @@ package body AvalonStreamComponentPkg is
       end if;
     else
       -- TimeOut handling
-      Alert(
-      AlertLogID,
-      TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1",
-      FAILURE
-      );
+      Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
     end if;
   end procedure DoAvalonStreamReadyHandshake;
 
   ------------------------------------------------------------
 
   procedure DoAvalonStreamPacketReadyHandshake (
-    signal Clk              : in std_logic;
-    signal Valid            : in std_logic;
-    signal Ready            : inout std_logic;
-    signal StartOfPacket    : in std_logic;
-    signal EndOfPacket      : in std_logic;
-    signal Data             : in std_logic_vector;
+    signal Clk : in std_logic;
+    signal Valid : in std_logic;
+    signal Ready : inout std_logic;
+    signal StartOfPacket : in std_logic;
+    signal EndOfPacket : in std_logic;
+    signal Data : in std_logic_vector;
     signal ScoreBoard : inout ScoreboardIdType;
-    signal WordsInPacket    : inout integer;
-    constant BeatsPerCycle  : in integer;
-    constant ByteOrder      : in boolean;
-    constant WordWidth      : in integer;
-    constant SymbolWidth    : in integer;
-    constant tpd_Clk_Ready  : in time;
-    constant AlertLogID     : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage : in string         := "";
-    constant TimeOutPeriod  : in time           := - 1 sec
+    signal WordsInPacket : inout integer;
+    constant BeatsPerCycle : in integer;
+    constant ByteOrder : in boolean;
+    constant WordWidth : in integer;
+    constant SymbolWidth : in integer;
+    constant tpd_Clk_Ready : in time;
+    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
+    constant TimeOutMessage : in string := "";
+    constant TimeOutPeriod : in time := -1 sec
   ) is
-    variable vData         : std_logic_vector(Data'range):= (others => 'U');
+    variable vData : std_logic_vector(Data'range) := (others => 'U');
     -- variable vParam        : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
     -- variable vChannel      : std_logic_vector(Channel'range) := (Channel'range => '0');
     -- variable vEmpty        : std_logic_vector(Empty'range)   := (Empty'range   => '0');
@@ -312,11 +314,11 @@ package body AvalonStreamComponentPkg is
       end if;
       -- start of packet
       vData := Data;
-     
+
       if ByteOrder then
         ReverseSymbolOrder(vData, SymbolWidth, Data'length);
       end if;
-      
+
       for i in 0 to BeatsPerCycle - 1 loop
         push(
         ScoreBoard,
@@ -359,16 +361,16 @@ package body AvalonStreamComponentPkg is
     Ready <= '0' after tpd_Clk_Ready;
     -- packet received
     -- push burst boundary
-    push(         ScoreBoard,          vData          );
+    push(ScoreBoard, vData);
     wait for 0 ns;
   end procedure;
   -------------------------------------------------------------
   procedure WaitForReady (
-    signal Clk          : in std_logic;
-    signal Ready        : in std_logic;
-    constant TimeOut    : in time;
+    signal Clk : in std_logic;
+    signal Ready : in std_logic;
+    constant TimeOut : in time;
     constant AlertLogID : in AlertLogIDType;
-    constant Msg        : in string
+    constant Msg : in string
   ) is
   begin
     if TimeOut > 0 sec then
@@ -384,37 +386,37 @@ package body AvalonStreamComponentPkg is
 
   -------------------------------------------------------------
   procedure ReverseSymbolOrder (
-    variable Data        : inout std_logic_vector;
+    variable Data : inout std_logic_vector;
     constant SymbolWidth : in integer;
-    constant TotalWidth  : in integer
+    constant TotalWidth : in integer
   ) is
-    variable SymbolCount   : integer;
+    variable SymbolCount : integer;
     variable vDataReversed : std_logic_vector(Data'range) := (others => 'X');
   begin
     SymbolCount := TotalWidth / SymbolWidth;
     for i in 0 to SymbolCount - 1 loop
       vDataReversed((SymbolCount - i) * SymbolWidth - 1 downto (SymbolCount - i - 1) * SymbolWidth) :=
-      Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
+                                                                                                      Data((i + 1) * SymbolWidth - 1 downto i * SymbolWidth);
     end loop;
     Data := vDataReversed;
   end procedure;
   procedure DoPrepareTransmitData (
-    signal Data            : out std_logic_vector;
-    signal Channel         : out std_logic_vector;
-    signal Empty           : out std_logic_vector;
-    signal Scoreboard      : inout ScoreboardIdType;
-    variable EmptyBeats    : inout integer;
+    signal Data : out std_logic_vector;
+    signal Channel : out std_logic_vector;
+    signal Empty : out std_logic_vector;
+    signal Scoreboard : inout ScoreboardIdType;
+    variable EmptyBeats : inout integer;
     constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
-    constant ByteOrder     : in boolean;
-    constant WordWidth     : in integer;
-    constant SymbolWidth   : in integer
+    constant ByteOrder : in boolean;
+    constant WordWidth : in integer;
+    constant SymbolWidth : in integer
   ) is
-    variable vData       : std_logic_vector(WordWidth - 1 downto 0) := (others => 'U');
-    variable vEmptyBeats : integer                                  := 0;
-    variable vChannel    : std_logic_vector(Channel'range);
-    variable vEmpty      : std_logic_vector(Empty'range);
-    variable vLast       : std_logic;
+    variable vData : std_logic_vector(WordWidth - 1 downto 0) := (others => 'U');
+    variable vEmptyBeats : integer := 0;
+    variable vChannel : std_logic_vector(Channel'range);
+    variable vEmpty : std_logic_vector(Empty'range);
+    variable vLast : std_logic;
   begin
     case BurstFifoMode is
       when STREAM_BURST_WORD_MODE =>

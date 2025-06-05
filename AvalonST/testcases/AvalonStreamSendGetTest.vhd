@@ -1,16 +1,7 @@
 
 architecture AvalonStreamSendGetTest of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
-  signal TestDone   : integer_barrier               := 1;
-  signal ExpData    : std_logic_vector(31 downto 0) := x"FFFFFFFF";
-  signal SendData : std_logic_vector(31 downto 0) := x"00000000";
-  signal SendDataArray : slv_vector(0 to 1)(31 downto 0) := (
-    x"10011001", -- 1st data
-    x"F00FF00F"  -- 2nd data
-  );
-  
-  signal getWords : integer := 2; -- Number of words to get from the receiver
-  
+  signal TestDone   : integer_barrier               := 1;  
 begin
 
   ------------------------------------------------------------
@@ -46,7 +37,6 @@ begin
 
   -- Test process
   transmitter_proc : process
-  variable NumBytes : integer := 5;
       variable CheckDataWord : std_logic_vector(31 downto 0);
   begin
     wait until Reset = '1';
@@ -109,10 +99,6 @@ WaitForClock(StreamTxRec, 2) ;
   end process transmitter_proc;
 
   receiver_proc : process
-    variable rx_data   : std_logic_vector(31 downto 0);
-    variable fifoWords : integer := 2;
-    variable PopData : std_logic_vector(31 downto 0);
-    variable receiveWords : integer := 2; -- Number of words to receive from the transmitter
       variable RxData     : std_logic_vector(31 downto 0);
       variable NumBytes : integer := 5;
       variable CheckDataWord : std_logic_vector(31 downto 0);
@@ -155,8 +141,6 @@ WaitForClock(StreamTxRec, 2) ;
     WaitForClock(StreamRxRec, 2);
     CheckBurstVector(StreamRxRec, 
         (X"0000_4001", X"0000_4003", X"0000_4005", X"0000_4007", X"0000_4009") ) ;
-
-      
 
     CheckBurstIncrement(StreamRxRec, X"0000_5000", 16) ; 
 

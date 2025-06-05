@@ -3,10 +3,7 @@ context osvvm_avalonst.AvalonStreamContext;
 
 architecture ReadyLatencyAllowance of AvalonST_TestCtrl is
 
-  signal TestDone  : integer_barrier := 1;
-  signal SyncPoint : integer_barrier := 1;
-  signal RxData    : std_logic_vector(31 downto 0);
-  signal TxOptions : AvalonStreamOptionsType;
+  signal TestDone : integer_barrier := 1;
 begin
 
   ------------------------------------------------------------
@@ -33,104 +30,82 @@ begin
     std.env.stop;
   end process;
 
-  ------------------------------------------------------------
-  -- Transmitter Process
-  ------------------------------------------------------------
+  -- Test process
   transmitter_proc : process
-    variable ExpData : slv_array_t(0 to 9)(3 downto 0) := (
-    "0001", -- 1
-    "0010", -- 2
-    "0011", -- 3
-    "0100", -- 4
-    "0101", -- 5
-    "0110", -- 6
-    "0111", -- 7
-    "1000", -- 8
-    "1001", -- 9
-    "1010"  -- 10
-);
-variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
-    "0001", -- 1
-    "0010", -- 2
-    "0011", -- 3
-    "0100", -- 4
-    "0101", -- 5
-    "0110", -- 6
-    "0111", -- 7
-    "1000", -- 8
-    "1001", -- 9
-    "1010"  -- 10
-);
+    variable CheckDataWord : std_logic_vector(31 downto 0);
   begin
     wait until Reset = '1';
-    wait for 0 ns;
-    SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 2);
+    SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 1);
     SetAvalonStreamOptions(StreamTxRec, READY_ALLOWANCE, 3);
-    wait for 10 ns;
-    --WaitForBarrier(SyncPoint);
-    SendAsync(StreamTxRec, ExpData);
-    --WaitForBarrier(SyncPoint);
-    WaitForTransaction(StreamTxRec);
 
-    SetAvalonStreamOptions(StreamTxRec, READY_LATENCY, 3);
-    SetAvalonStreamOptions(StreamTxRec, READY_ALLOWANCE, 5);
-    wait for 10 ns;
-    --WaitForBarrier(SyncPoint);
-    SendAsync(StreamTxRec, ExpData2);
+    -- Send and Get    
+    log("Transmit 5 words");
+    CheckDataWord := x"0000_0000";
+    for I in 1 to 5 loop
+      Send(StreamTxRec, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)));
+      WaitForClock(StreamTxRec, 5);
+    end loop;
+
+    WaitForClock(StreamTxRec, 5);
+
+    -- Send and Check    
+    log("Transmit 5 words");
+    CheckDataWord := x"0000_1000";
+    for I in 1 to 5 loop
+      Send(StreamTxRec, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)));
+      WaitForClock(StreamTxRec, 5);
+    end loop;
+WaitForClock(StreamTxRec, 5);
+
+-- SendBurst and GetBurst    
+    log("Send 5 word burst") ;
+    CheckDataWord := x"0000_2000";
+    for I in 1 to 5 loop 
+      Push( StreamTxRec.BurstFifo, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length))  ) ; 
+    end loop ; 
+    SendBurst(StreamTxRec, 5) ;
     WaitForTransaction(StreamTxRec);
-    wait for 20 ns; -- to see more in the waveform
     WaitForBarrier(TestDone);
     wait;
   end process transmitter_proc;
 
-  ------------------------------------------------------------
-  -- Receiver Process
-  ------------------------------------------------------------
   receiver_proc : process
-    variable Available : boolean := false;
-    variable ExpData : slv_array_t(0 to 9)(3 downto 0) := (
-      "0001", -- 1
-      "0010", -- 2
-      "0011", -- 3
-      "0100", -- 4
-      "0101", -- 5
-      "0110", -- 6
-      "0111", -- 7
-      "1000", -- 8
-      "1001", -- 9
-      "1010"  -- 10
-  );
-  variable ExpData2 : slv_array_t(0 to 9)(3 downto 0) := (
-    "0001", -- 1
-    "0010", -- 2
-    "0011", -- 3
-    "0100", -- 4
-    "0101", -- 5
-    "0110", -- 6
-    "0111", -- 7
-    "1000", -- 8
-    "1001", -- 9
-    "1010"  -- 10
-);
+    variable RxData : std_logic_vector(31 downto 0);
+    variable CheckDataWord : std_logic_vector(31 downto 0);
+    variable NumBytes : integer := 5;
+
   begin
     wait until Reset = '1';
-    wait for 0 ns;
-    --SetAvalonStreamOptions(StreamRxRec, READY_LATENCY, 3);
+    SetAvalonStreamOptions(StreamRxRec, READY_LATENCY, 1);
     SetAvalonStreamOptions(StreamRxRec, READY_ALLOWANCE, 3);
-    wait for 10 ns;
-    --WaitForBarrier(SyncPoint);
 
-    Receive(StreamRxRec, 10);
-    WaitForTransaction(StreamRxRec);
-    Check(StreamRxRec, ExpData);
-    SetAvalonStreamOptions(StreamRxRec, READY_ALLOWANCE, 5);
-    wait for 10 ns;
-    --WaitForBarrier(SyncPoint);
-    wait for 20 ns;
-    Receive(StreamRxRec, 10);
-    WaitForTransaction(StreamRxRec);
-    Check(StreamRxRec, ExpData2);
-    WaitForTransaction(StreamRxRec);
+    log("Get 5 words");
+    CheckDataWord := x"0000_0000";
+    for I in 1 to 5 loop
+      Get(StreamRxRec, RxData);
+      AffirmIfEqual(RxData, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)), "CheckData RxData");
+      WaitForClock(StreamRxRec, 5);
+    end loop;
+
+    WaitForClock(StreamRxRec, 5);
+
+    log("Check 5 words");
+    CheckDataWord := x"0000_1000";
+    for I in 1 to 5 loop
+      Check(StreamRxRec, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)));
+      WaitForClock(StreamRxRec, 5);
+    end loop;
+
+    WaitForClock(StreamRxRec, 5);
+
+    log("Get 5 word burst") ;
+    GetBurst(StreamRxRec, NumBytes) ;
+    AffirmIfEqual(NumBytes, 5, "Receiver: 5 Received") ;
+    CheckDataWord := x"0000_2000";
+    for I in 1 to 5 loop 
+      RxData := Pop( StreamRxRec.BurstFifo ) ;      
+      AffirmIfEqual(RxData,  std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)) , "RxData") ;
+    end loop ; 
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

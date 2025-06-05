@@ -41,6 +41,9 @@ include ../src/build.pro
 include ../testbench/testbench.pro
 
 SetSaveWaves true
-RunTest AvalonStreamPacketTransport.vhd
+RunTest AvalonStreamReadyLatencyAllowance.vhd
+set testname1 "AvalonStreamReadyLatencyAllowance"
+file copy -force "../sim/reports/AvalonStream/$testname1.fst" "../../../"
+#RunTest AvalonStreamPacketTransport.vhd
 #RunTest AvalonStream_SetOptions.vhd
 #RunTest AvalonStreamSendGetTest.vhd

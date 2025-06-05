@@ -212,20 +212,13 @@ begin
               end if;
 
             when READY_ALLOWANCE =>
-              if (TransRec.IntToModel < ReadyLatency) then
-                AlertIf(ModelID, TransRec.IntToModel < ReadyLatency,
-                "ReadyAllowance must be greater than or equal to ReadyLatency - set to ReadyLatency now!", WARNING);
-                ReadyAllowance       <= ReadyLatency;
-                ReadyAllowanceCycles <= ReadyLatency;
-              else
+             
                 ReadyAllowance       <= TransRec.IntToModel;
                 ReadyAllowanceCycles <= TransRec.IntToModel;
-              end if;
             when READY_LATENCY =>
               ReadyLatency <= TransRec.IntToModel;
             when others =>
               Alert(ModelID, "SetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
-              wait for 0 ns;
           end case;
           wait for 0 ns;
         when GET_MODEL_OPTIONS =>
@@ -286,11 +279,11 @@ begin
           );
           DoAvalonStreamValidHandshake(
           Clk, Valid, Ready, StartOfNewStream,
-          0, 0, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
-          "Packet Valid Handshake Timeout", tperiod_Clk * 100
+          ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, ModelID,
+          "Packet Valid Handshake Timeout", 0 ns
           );
 
-          -- Nach erstem Wort SOP zurücksetzen
+          -- Nach erstem Wort SOP zurï¿½cksetzen
           StartOfPacket     <= '0' after tpd_Clk_StartOfPacket;
           TransmitDoneCount <= TransmitDoneCount + BeatsPerCycle;
           -- Bei EOP fertig
@@ -318,7 +311,7 @@ begin
 
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
         ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
-        "Valid Handshake timeout", ReadyLatency * tperiod_Clk);
+        "Valid Handshake timeout", 0 ns);
 
         if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream          <= 1;
