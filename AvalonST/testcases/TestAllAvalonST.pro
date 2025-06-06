@@ -17,3 +17,4 @@ RunTest AvalonStreamReadyLatencyAllowance.vhd
 RunTest AvalonStreamPacketTransport.vhd
 RunTest AvalonStreamSetOptions.vhd
 RunTest AvalonStreamSendGetTest.vhd
+RunTest AvalonStreamBeatsPerCycle.vhd

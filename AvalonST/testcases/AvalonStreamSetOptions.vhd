@@ -83,8 +83,8 @@ begin
     wait;
   end process ControlProc;
   ------------------------------------------------------------
-  -- AxiTransmitterProc
-  --   Generate transactions for AxiTransmitter
+  -- AvalonStreamTransmitterProc
+  --   Generate transactions for AvalonStreamTransmitter
   ------------------------------------------------------------
   AvalonStreamTransmitterProc : process
     variable Data    : std_logic_vector(DATA_WIDTH - 1 downto 0) := (others => '0');
@@ -106,44 +106,21 @@ begin
       Data := std_logic_vector(unsigned(Data) + 1);
     end loop;
 
-    -- for i in 1 to 4 loop 
-    --   Send(StreamTxRec, Data, (Channel+5) & "0") ;
-    --   Data := Data + 1; 
-    -- end loop ;
+    SetAvalonStreamOptions(StreamTxRec, BYTE_ORDER, TRUE);
+    for i in 1 to 1 loop
+      Send(StreamTxRec, Data);
+      Data := std_logic_vector(unsigned(Data) + 1);
+    end loop;
 
-    -- for i in 1 to 4 loop 
-    --   Send(StreamTxRec, Data, (Dest+6) & (USER+5) & "0") ;
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- for i in 1 to 4 loop 
-    --   Send(StreamTxRec, Data, (ID+7) & (Dest+6) & (USER+5) & "0") ;
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- for i in 1 to 4 loop 
-    --   Send(StreamTxRec, Data, Dash(ID'range) & Dash(Dest'range) & (USER+5) & "-") ;
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- for i in 1 to 4 loop 
-    --   Send(StreamTxRec, Data, Dash(ID'range) & (Dest+6) & Dash(USER'range) & "-") ;
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- for i in 1 to 4 loop 
-    --   Send(StreamTxRec, Data, (ID+7) & Dash(Dest'range) & Dash(USER'range) & "-") ;
-    --   Data := Data + 1; 
-    -- end loop ;
-
+    
     -- Wait for outputs to propagate and signal TestDone
     WaitForClock(StreamTxRec, 2);
     WaitForBarrier(TestDone);
     wait;
   end process AvalonStreamTransmitterProc;
   ------------------------------------------------------------
-  -- AxiReceiverProc
-  --   Generate transactions for AxiReceiver
+  -- AvalonStreamReceiverProc
+  --   Generate transactions for AvalonStreamReceiver
   ------------------------------------------------------------
   AvalonStreamReceiverProc : process
     variable Data, RxData   : std_logic_vector(DATA_WIDTH - 1 downto 0) := (others => '0');
@@ -177,95 +154,20 @@ begin
       Data := std_logic_vector(unsigned(Data) + 1);
     end loop;
 
-    -- Param := (ID+3) & (Dest+2) & (User+5) & "0" ;
-    -- for i in 1 to 4 loop 
-    --   case i is 
-    --     when 1 =>
-    --       Get(StreamRxRec, RxData, RxParam) ;
-    --       AffirmIfEqual(RxData,  Data,    "Data ") ; 
-    --       AffirmIfEqual(RxParam, Param,   "Param ID & Dest & User ") ; 
-    --     when 2 => 
-    --       Check(StreamRxRec, Data, Param) ;
-    --     when others =>
-    --       Check(StreamRxRec, Data, (USER+5) & "0") ;
-    --   end case ; 
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- Param := (ID+3) & (Dest+6) & (User+5) & "0" ;
-    -- for i in 1 to 4 loop 
-    --   case i is 
-    --     when 1 =>
-    --       Get(StreamRxRec, RxData, RxParam) ;
-    --       AffirmIfEqual(RxData,  Data,    "Data ") ; 
-    --       AffirmIfEqual(RxParam, Param,   "Param ID & Dest & User ") ; 
-    --     when 2 => 
-    --       Check(StreamRxRec, Data, Param) ;
-    --     when others =>
-    --       Check(StreamRxRec, Data, (Dest+6) & (USER+5) & "0") ;
-    --   end case ; 
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- Param := (ID+7) & (Dest+6) & (User+5) & "0" ;
-    -- for i in 1 to 4 loop 
-    --   case i is 
-    --     when 1 =>
-    --       Get(StreamRxRec, RxData, RxParam) ;
-    --       AffirmIfEqual(RxData,  Data,    "Data ") ; 
-    --       AffirmIfEqual(RxParam, Param,   "Param ID & Dest & User ") ; 
-    --     when 2 => 
-    --       Check(StreamRxRec, Data, Param) ;
-    --     when others =>
-    --       Check(StreamRxRec, Data, (ID+7) & (Dest+6) & (USER+5) & "0") ;
-    --   end case ; 
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- Param := (ID+3) & (Dest+2) & (User+5) & "0" ;
-    -- for i in 1 to 4 loop 
-    --   case i is 
-    --     when 1 =>
-    --       Get(StreamRxRec, RxData, RxParam) ;
-    --       AffirmIfEqual(RxData,  Data,    "Data ") ; 
-    --       AffirmIfEqual(RxParam, Param,   "Param ID & Dest & User ") ; 
-    --     when 2 => 
-    --       Check(StreamRxRec, Data, Param) ;
-    --     when others =>
-    --       Check(StreamRxRec, Data, Dash(ID'range) & Dash(Dest'range) & (USER+5) & "-") ;
-    --   end case ; 
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- Param := (ID+3) & (Dest+6) & (User+1) & "0" ;
-    -- for i in 1 to 4 loop 
-    --   case i is 
-    --     when 1 =>
-    --       Get(StreamRxRec, RxData, RxParam) ;
-    --       AffirmIfEqual(RxData,  Data,    "Data ") ; 
-    --       AffirmIfEqual(RxParam, Param,   "Param ID & Dest & User ") ; 
-    --     when 2 => 
-    --       Check(StreamRxRec, Data, Param) ;
-    --     when others =>
-    --       Check(StreamRxRec, Data, Dash(ID'range) & (Dest+6) & Dash(USER'range) & "-") ;
-    --   end case ; 
-    --   Data := Data + 1; 
-    -- end loop ;
-
-    -- Param := (ID+7) & (Dest+2) & (User+1) & "0" ;
-    -- for i in 1 to 4 loop 
-    --   case i is 
-    --     when 1 =>
-    --       Get(StreamRxRec, RxData, RxParam) ;
-    --       AffirmIfEqual(RxData,  Data,    "Data ") ; 
-    --       AffirmIfEqual(RxParam, Param,   "Param ID & Dest & User ") ; 
-    --     when 2 => 
-    --       Check(StreamRxRec, Data, Param) ;
-    --     when others =>
-    --       Check(StreamRxRec, Data, (ID+7) & Dash(Dest'range) & Dash(USER'range) & "-") ;
-    --   end case ; 
-    --   Data := Data + 1; 
-    -- end loop ;     
+    -- Empfang der zweiten Send-Operation mit gesetzter BYTE_ORDER Option
+    SetAvalonStreamOptions(StreamRxRec, BYTE_ORDER, TRUE);
+    Param := (Channel) & (Empty) & Wildcard;
+    for i in 1 to 1 loop
+      case i is
+        when 1 =>
+          Get(StreamRxRec, RxData, RxParam);
+          AffirmIfEqual(RxData, Data, "Data (BYTE_ORDER)");
+          AffirmIfEqual(RxParam, Param, "Param Channel & Empty (BYTE_ORDER)");
+        when others =>
+          Check(StreamRxRec, Data);
+      end case;
+    end loop;
+  
     -- Wait for outputs to propagate and signal TestDone
     WaitForClock(StreamRxRec, 2);
     WaitForBarrier(TestDone);

@@ -181,12 +181,12 @@ package body AvalonStreamComponentPkg is
   begin
     if Ready = '1' then
       Valid <= '1' after tpd_Clk_Valid;
-    
+
     elsif StartOfNewStream = 1 then
       ReadyAllowanceCyclesCount <= ReadyAllowance;
       WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
       if ReadyLatency > 0 then
-        for i in 1 to ReadyLatency-1 loop
+        for i in 1 to ReadyLatency - 1 loop
           wait until Clk = '1';
         end loop;
       end if;
@@ -239,7 +239,6 @@ package body AvalonStreamComponentPkg is
     --   UseReadyAllowance := true;
     -- end if;
     if ReadyBeforeValid then
-      log("setting ready to 1");
       Ready <= '1' after tpd_Clk_Ready;
     else
       Ready <= '0' after tpd_Clk_Ready;
@@ -253,7 +252,6 @@ package body AvalonStreamComponentPkg is
     if TimeOutPeriod > 0 sec then
       wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
     else
-      log("waiting for valid to be 1", INFO);
       wait on Clk until Clk = '1' and Valid = '1';
     end if;
 
@@ -427,6 +425,9 @@ package body AvalonStreamComponentPkg is
             vEmptyBeats := vEmptyBeats + 1;
           else
             (vData, vChannel, vEmpty, vLast) := Pop(Scoreboard);
+            if (ByteOrder = true) then
+              ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
+            end if;
             Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= vData;
           end if;
         end loop;

@@ -45,5 +45,6 @@ SetSaveWaves true
 # # set testname1 "AvalonStreamReadyLatencyAllowance"
 # # file copy -force "../sim/reports/AvalonStream/$testname1.fst" "../../../"
 #RunTest AvalonStreamPacketTransport.vhd
-RunTest AvalonStreamSetOptions.vhd
+#RunTest AvalonStreamSetOptions.vhd
+RunTest AvalonStreamBeatsPerCycle.vhd
 #RunTest AvalonStreamSendGetTest.vhd
