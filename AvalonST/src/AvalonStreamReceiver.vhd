@@ -471,7 +471,7 @@ begin
     variable vChannel : std_logic_vector(Channel'range) := (Channel'range => '0');
     variable vEmpty : std_logic_vector(Empty'range) := (Empty'range => '0');
     variable PushData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := (others => '0');
-    variable ReadyBeforeValid : boolean := TRUE;
+    variable ReadyBeforeValid : boolean := true;
     variable ReadyDelayCycles : integer := 0;
   begin
     -- Initialize

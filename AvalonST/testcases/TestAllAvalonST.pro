@@ -1,5 +1,6 @@
 
 #include ../../OsvvmLibraries.pro
+include ../../Common/Common.pro
 TestSuite AvalonStream
 include ../src/build.pro
 include ../testbench/testbench.pro

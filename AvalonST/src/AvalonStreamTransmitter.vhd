@@ -66,7 +66,7 @@ architecture bhv of AvalonStreamTransmitter is
   signal ReadyLatency : integer := 0;
   signal ReadyAllowance : integer := 0;
   signal ByteOrder : boolean := false; -- big endian is default
-  signal ReadyAllowanceCycles, ReadyAllowanceCyclesCount : integer := 0;
+  signal ReadyAllowanceTransferCount : integer := 0;
   signal PacketTransfer : boolean := false;
   signal LastOffsetCount : integer := 0;
   signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH;
@@ -223,7 +223,6 @@ begin
             when READY_ALLOWANCE =>
 
               ReadyAllowance <= TransRec.IntToModel;
-              ReadyAllowanceCycles <= TransRec.IntToModel;
             when READY_LATENCY =>
               ReadyLatency <= TransRec.IntToModel;
             when others =>
@@ -287,7 +286,7 @@ begin
           );
           DoAvalonStreamValidHandshake(
           Clk, Valid, Ready, StartOfNewStream,
-          ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, ModelID,
+          ReadyLatency, ReadyAllowance, ReadyAllowanceTransferCount, tpd_Clk_Valid, ModelID,
           "Packet Valid Handshake Timeout", 0 ns
           );
 
@@ -319,13 +318,12 @@ begin
         DoPrepareTransmitData(Data, Channel, Empty, TransmitFifo, vEmptyBeats, BurstFifoMode, BeatsPerCycle, ByteOrder, AVALON_STREAM_WORD_WIDTH, AVALON_STREAM_SYMBOL_WIDTH);
 
         DoAvalonStreamValidHandshake(Clk, Valid, Ready, StartOfNewStream,
-        ReadyLatency, ReadyAllowance, ReadyAllowanceCyclesCount, tpd_Clk_Valid, BusFailedID,
+        ReadyLatency, ReadyAllowance, ReadyAllowanceTransferCount, tpd_Clk_Valid, BusFailedID,
         "Valid Handshake timeout", 0 ns);
 
         if (TransmitDoneCount + BeatsPerCycle >= TransmitRequestCount) then
           StartOfNewStream <= 1;
           Valid <= '0' after tpd_Clk_Valid;
-          ReadyAllowanceCyclesCount <= ReadyAllowance;
           Data <= (others => 'X');
         else
           StartOfNewStream <= 0;

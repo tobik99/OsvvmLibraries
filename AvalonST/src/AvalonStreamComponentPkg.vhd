@@ -87,11 +87,12 @@ package AvalonStreamComponentPkg is
     signal StartOfNewStream : in integer;
     constant ReadyLatency : in integer;
     constant ReadyAllowance : in integer;
-    signal ReadyAllowanceCyclesCount : inout integer;
+    signal ReadyAllowanceTransferCount : inout integer;
     constant tpd_Clk_Valid : in time;
     constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string := "";
-    constant TimeOutPeriod : in time := -1 sec
+    constant TimeOutPeriod : in time := -1 sec;
+    constant ReadyBeforeValid : in boolean := false
   );
 
   ------------------------------------------------------------
@@ -172,46 +173,62 @@ package body AvalonStreamComponentPkg is
     signal StartOfNewStream : in integer;
     constant ReadyLatency : in integer;
     constant ReadyAllowance : in integer;
-    signal ReadyAllowanceCyclesCount : inout integer;
+    signal ReadyAllowanceTransferCount : inout integer;
     constant tpd_Clk_Valid : in time;
     constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string := "";
-    constant TimeOutPeriod : in time := -1 sec
+    constant TimeOutPeriod : in time := -1 sec;
+    constant ReadyBeforeValid : in boolean := false
   ) is
   begin
-    if Ready = '1' then
+    if (ReadyLatency = 0 and ReadyAllowance = 0 and Ready = '0') then -- source has to assert valid before ready
       Valid <= '1' after tpd_Clk_Valid;
-
-    elsif StartOfNewStream = 1 then
-      ReadyAllowanceCyclesCount <= ReadyAllowance;
       WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-      if ReadyLatency > 0 then
-        for i in 1 to ReadyLatency - 1 loop
-          wait until Clk = '1';
-        end loop;
-      end if;
-
-      Valid <= '1' after tpd_Clk_Valid;
-
-    elsif StartOfNewStream = 0 then
-      if ReadyAllowance > ReadyLatency then
-        if Ready = '0' and ReadyAllowanceCyclesCount > 0 then
-          ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
-          Valid <= '1' after tpd_Clk_Valid;
-        elsif Ready = '0' then
-          Valid <= '0' after tpd_Clk_Valid;
-        else
-          Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
-        end if;
-
-      elsif ReadyAllowance = ReadyLatency then
+    elsif (ReadyLatency > 0 and Ready = '0') then -- sink has to assert ready before valid
+      if(ReadyAllowanceTransferCount > 0) then
+        ReadyAllowanceTransferCount <= ReadyAllowanceTransferCount - 1;
         Valid <= '1' after tpd_Clk_Valid;
-        if Ready /= '1' then
-          WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-          Valid <= '0';
-        end if;
+      else
+        WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+        Valid <= '1' after tpd_Clk_Valid;
+        ReadyAllowanceTransferCount <= ReadyAllowance;
       end if;
+      
     end if;
+    -- if Ready = '1' then
+    --   Valid <= '1' after tpd_Clk_Valid;
+
+    -- elsif StartOfNewStream = 1 then
+
+    --   ReadyAllowanceCyclesCount <= ReadyAllowance;
+    --   WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+    --   if ReadyLatency > 0 then
+    --     for i in 1 to ReadyLatency - 1 loop
+    --       wait until Clk = '1';
+    --     end loop;
+    --   end if;
+
+    --   Valid <= '1' after tpd_Clk_Valid;
+
+    -- elsif StartOfNewStream = 0 then
+    --   if ReadyAllowance > ReadyLatency then
+    --     if Ready = '0' and ReadyAllowanceCyclesCount > 0 then
+    --       ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
+    --       Valid <= '1' after tpd_Clk_Valid;
+    --     elsif Ready = '0' then
+    --       Valid <= '0' after tpd_Clk_Valid;
+    --     else
+    --       Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
+    --     end if;
+
+    --   elsif ReadyAllowance = ReadyLatency then
+    --     Valid <= '1' after tpd_Clk_Valid;
+    --     if Ready /= '1' then
+    --       WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+    --       Valid <= '0';
+    --     end if;
+    --   end if;
+    -- end if;
 
     wait until Clk = '1';
   end procedure;
