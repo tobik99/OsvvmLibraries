@@ -146,7 +146,6 @@ package AvalonStreamComponentPkg is
   );
 
   procedure WaitForReady (
-    signal Clk : in std_logic;
     signal Ready : in std_logic;
     constant TimeOut : in time;
     constant AlertLogID : in AlertLogIDType;
@@ -157,6 +156,13 @@ package AvalonStreamComponentPkg is
     variable Data : inout std_logic_vector;
     constant SymbolWidth : in integer;
     constant TotalWidth : in integer
+  );
+
+  procedure WaitForValid (
+    signal Valid : in std_logic;
+    constant TimeOut : in time;
+    constant AlertLogID : in AlertLogIDType;
+    constant Msg : in string
   );
 
 end package AvalonStreamComponentPkg;
@@ -183,17 +189,16 @@ package body AvalonStreamComponentPkg is
   begin
     if (ReadyLatency = 0 and ReadyAllowance = 0 and Ready = '0') then -- source has to assert valid before ready
       Valid <= '1' after tpd_Clk_Valid;
-      WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+      WaitForReady(Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
     elsif (ReadyLatency > 0 and Ready = '0') then -- sink has to assert ready before valid
-      if(ReadyAllowanceTransferCount > 0) then
+      if (ReadyAllowanceTransferCount > 0) then
         ReadyAllowanceTransferCount <= ReadyAllowanceTransferCount - 1;
         Valid <= '1' after tpd_Clk_Valid;
       else
-        WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
+        WaitForReady(Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
         Valid <= '1' after tpd_Clk_Valid;
         ReadyAllowanceTransferCount <= ReadyAllowance;
       end if;
-      
     end if;
     -- if Ready = '1' then
     --   Valid <= '1' after tpd_Clk_Valid;
@@ -252,46 +257,54 @@ package body AvalonStreamComponentPkg is
   ) is
     variable UseReadyAllowance : boolean := false;
   begin
-    -- if(WordRequestCount - ReadyAllowance > 0) then
-    --   UseReadyAllowance := true;
+    -- if ReadyBeforeValid then
+    --   Ready <= '1' after tpd_Clk_Ready;
+    -- else
+    --   Ready <= '0' after tpd_Clk_Ready;
     -- end if;
-    if ReadyBeforeValid then
-      Ready <= '1' after tpd_Clk_Ready;
-    else
-      Ready <= '0' after tpd_Clk_Ready;
-    end if;
-    StartOfNewStream <= 0;
-    if (ReadyAllowance > 0) and (WordRequestCount - ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
-      Ready <= '0' after tpd_Clk_Ready;
-    end if;
+    -- StartOfNewStream <= 0;
+    -- if (ReadyAllowance > 0) and (WordRequestCount - ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
+    --   Ready <= '0' after tpd_Clk_Ready;
+    -- end if;
 
-    -- Wait to Receive Transaction
-    if TimeOutPeriod > 0 sec then
-      wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
-    else
-      wait on Clk until Clk = '1' and Valid = '1';
-    end if;
+    -- -- Wait to Receive Transaction
+    -- if TimeOutPeriod > 0 sec then
+    --   wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
+    -- else
+    --   wait on Clk until Clk = '1' and Valid = '1';
+    -- end if;
 
-    if Valid = '1' then
-      if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
-        AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
-      else
-        if not ReadyBeforeValid then
-          Ready <= '1' after tpd_Clk_Ready;
-        end if;
-        -- If ready not signaled yet, find ready at a rising edge of clk
-        if Ready /= '1' then
-          wait on Clk until Clk = '1' and (Ready = '1' or Valid /= '1');
-          AlertIf(AlertLogID, Valid /= '1', TimeOutMessage & " Valid (" & to_string(Valid) & ") " &
-          "deasserted before Ready asserted (" & to_string(Ready) & ") ",
-          FAILURE
-          );
-        end if;
-      end if;
-    else
-      -- TimeOut handling
-      Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
+    -- if Valid = '1' then
+    --   if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
+    --     AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
+    --   else
+    --     if not ReadyBeforeValid then
+    --       Ready <= '1' after tpd_Clk_Ready;
+    --     end if;
+    --     -- If ready not signaled yet, find ready at a rising edge of clk
+    --     if Ready /= '1' then
+    --       wait on Clk until Clk = '1' and (Ready = '1' or Valid /= '1');
+    --       AlertIf(AlertLogID, Valid /= '1', TimeOutMessage & " Valid (" & to_string(Valid) & ") " &
+    --       "deasserted before Ready asserted (" & to_string(Ready) & ") ",
+    --       FAILURE
+    --       );
+    --     end if;
+    --   end if;
+    -- else
+    --   -- TimeOut handling
+    --   Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
+    -- end if;
+    --Ready <= '1' after tpd_Clk_Ready;
+    if (WordRequestCount = WordReceiveCount) then
+      StartOfNewStream <= 1;
+      WordReceiveCount <= 0;
+      wait until clk = '1';
     end if;
+    if (Valid /= '1') then
+      WaitForValid(Valid, TimeOutPeriod, AlertLogID, TimeOutMessage);
+    end if;
+    Ready <= '1' after tpd_Clk_Ready;
+    wait until Clk = '1';
   end procedure DoAvalonStreamReadyHandshake;
 
   ------------------------------------------------------------
@@ -324,6 +337,7 @@ package body AvalonStreamComponentPkg is
       Ready <= '1' after tpd_Clk_Ready;
 
       if TimeOutPeriod > 0 sec then
+        -- todo das warten auf clk = 1 könnte fehlerhaft sein!
         wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1' for TimeOutPeriod;
       else
         wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
@@ -382,21 +396,48 @@ package body AvalonStreamComponentPkg is
   end procedure;
   -------------------------------------------------------------
   procedure WaitForReady (
-    signal Clk : in std_logic;
     signal Ready : in std_logic;
     constant TimeOut : in time;
     constant AlertLogID : in AlertLogIDType;
     constant Msg : in string
   ) is
+    variable v_start_time : time := now;
   begin
     if TimeOut > 0 sec then
-      wait on Clk until Clk = '1' and Ready = '1' for TimeOut;
+      loop
+        exit when Ready = '1';
+        exit when now - v_start_time >= TimeOut;
+        wait for 1 ns; -- kleine Wartezeit, um Sim weiterlaufen zu lassen
+      end loop;
+
       if Ready /= '1' then
         Alert(AlertLogID, Msg & ".  Ready: " & to_string(Ready) & "  Expected: 1", FAILURE);
-        wait until Clk = '1';
       end if;
     else
-      wait on Clk until Clk = '1' and Ready = '1';
+      wait until Ready = '1';
+    end if;
+  end procedure;
+
+  procedure WaitForValid (
+    signal Valid : in std_logic;
+    constant TimeOut : in time;
+    constant AlertLogID : in AlertLogIDType;
+    constant Msg : in string
+  ) is
+    variable v_start_time : time := now;
+  begin
+    if TimeOut > 0 sec then
+      loop
+        exit when Valid = '1';
+        exit when now - v_start_time >= TimeOut;
+        wait for 1 ns;
+      end loop;
+
+      if Valid /= '1' then
+        Alert(AlertLogID, Msg & ".  Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
+      end if;
+    else
+      wait until Valid = '1';
     end if;
   end procedure;
 

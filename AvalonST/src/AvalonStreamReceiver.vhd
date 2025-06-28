@@ -122,14 +122,17 @@ begin
     end function param_to_string;
   begin
     wait for 0 ns;
+    Log(ModelID, "AvalonStreamReceiver TransactionDispatcher started", INFO);
     TransRec.BurstFifo <= NewID("RxPacketFifo", ModelID, Search => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
+      Log(ModelID, "TransactionDispatcher Loop", INFO);
       WaitForTransaction(
       Clk => Clk,
       Rdy => TransRec.Rdy,
       Ack => TransRec.Ack
       );
+      Log(ModelID, "TransactionDispatcher: Received Transaction", INFO);
 
       case Operation is
         when GET | TRY_GET | CHECK | TRY_CHECK =>
@@ -199,6 +202,7 @@ begin
             end if;
           end if;
         when GET_BURST | TRY_GET_BURST =>
+        Log(ModelID, "GET_BURST and TRY_GET_BURST are not supported in AvalonStreamReceiver", INFO);
           if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
             if not TryBurstWaiting then
               increment(BurstRequestCount);
@@ -210,6 +214,7 @@ begin
             TransRec.ParamFromModel <= (TransRec.ParamFromModel'range => '0');
             wait for 0 ns;
           else
+         
             if not TryBurstWaiting then
               RequestWordsInCurrentBurst <= TransRec.IntToModel;
               increment(BurstRequestCount);
@@ -219,8 +224,10 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
+             
             if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
+             
               WaitForToggle(BurstReceiveCount);
             end if;
             FifoWordCount := 0;
@@ -471,7 +478,7 @@ begin
     variable vChannel : std_logic_vector(Channel'range) := (Channel'range => '0');
     variable vEmpty : std_logic_vector(Empty'range) := (Empty'range => '0');
     variable PushData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := (others => '0');
-    variable ReadyBeforeValid : boolean := true;
+    variable ReadyBeforeValid : boolean := false;
     variable ReadyDelayCycles : integer := 0;
   begin
     -- Initialize
@@ -484,7 +491,9 @@ begin
       if WaitForGet then
         -- if no request, wait until we have one
         if not ((BurstRequestCount > BurstReceiveCount)) then
+          Log(ModelID, "ReceiveHandler: Waiting for Get Request", INFO);
           wait until (BurstRequestCount > BurstReceiveCount) or not WaitForGet;
+          Log(ModelID, "ReceiveHandler: Get Request received", INFO);
           -- push(ReceiveFifo, vData & vParam & '1'); -- marks the start of the burst
         end if;
       end if;
@@ -599,14 +608,12 @@ begin
           StartOfNewStream <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
           Ready <= '0' after tpd_Clk_Ready; -- end of burst
-          push(ReceiveFifo, PushData & vParam & '1'); -- marks the end of the burst
-          ReceivedWordsInCurrentBurst <= 0; -- reset for next burst         
+          push(ReceiveFifo, PushData & vParam & '1'); -- marks the end of the burst 
         elsif (ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst) then
           wait for 10 ns;
           Alert(ModelID, "ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst: " &
           to_string(ReceivedWordsInCurrentBurst) & " > " & to_string(RequestWordsInCurrentBurst), FAILURE);
         end if;
-        --wait for 0 ns;
       else
         wait for 10 ns;
         Alert(ModelID, "AvalonStreamReceiver: No Word or Packet request was received!", FAILURE);
