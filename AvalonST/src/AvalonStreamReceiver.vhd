@@ -36,7 +36,7 @@ entity AvalonStreamReceiver is
 
     StartOfPacket : in std_logic := '0';
     EndOfPacket : in std_logic := '0';
-    Empty : in std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
+    Empty : in std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_WORD_WIDTH) - 1 downto 0) := (others => '0');
     Channel : in std_logic_vector(7 downto 0) := (others => '0');
     -- testbench record
     TransRec : inout StreamRecType
@@ -71,8 +71,7 @@ architecture bhv of AvalonStreamReceiver is
   signal ReadyAllowance : integer := 0;
   signal ByteOrder : boolean := false; -- big endian is default
   signal PacketTransfer : boolean := false;
-  signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH;
-  signal WordWidth : integer := AVALON_STREAM_DATA_WIDTH;
+  signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
 
   signal LastOffsetCount : integer := 0;
   signal ParamChannel : std_logic_vector(Channel'range) := ifelse(INIT_CHANNEL'length > 0, INIT_CHANNEL, (Channel'range => '0'));
@@ -411,7 +410,7 @@ begin
               else
                 Log(ModelID, "Packet Transfer set to false", INFO);
               end if;
-            when BYTE_ORDER =>
+            when SYMBOL_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
               if (ByteOrder = true) then
                 Log(ModelID, "Byte Order set to Little Endian", INFO);
@@ -452,7 +451,7 @@ begin
               TransRec.ParamFromModel <= SafeResize(ModelID, ParamChannel, TransRec.ParamFromModel'length);
             when PACKET_TRANSFER =>
               TransRec.BoolFromModel <= PacketTransfer;
-            when BYTE_ORDER =>
+            when SYMBOL_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;
@@ -477,7 +476,7 @@ begin
     variable vParam : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
     variable vChannel : std_logic_vector(Channel'range) := (Channel'range => '0');
     variable vEmpty : std_logic_vector(Empty'range) := (Empty'range => '0');
-    variable PushData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := (others => '0');
+    variable PushData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0) := (others => '0');
     variable ReadyBeforeValid : boolean := false;
     variable ReadyDelayCycles : integer := 0;
   begin
@@ -546,7 +545,7 @@ begin
         -- push burst boundary
         push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
 
-        -- end of procedure!
+      
         increment(BurstReceiveCount);
         wait for 0 ns;
 
@@ -581,16 +580,16 @@ begin
             log("using burst byte mode");
           when STREAM_BURST_WORD_MODE =>
 
-            if BeatsPerCycle = 0 then
+            if BeatsPerCycle = 1 then
               Log(ModelID,
               "Received Word: " & to_hxstring(vData), INFO);
               push(ReceiveFifo, vData & vParam & '0');
             else
               log("pushing beats per cycle: " & to_string(BeatsPerCycle));
-              for j in 0 to BeatsPerCycle - 1 loop
-                PushData := vData((j + 1) * AVALON_STREAM_WORD_WIDTH - 1 downto j * AVALON_STREAM_WORD_WIDTH);
-                push(ReceiveFifo, PushData & vParam & '0');
-              end loop;
+              --for j in 0 to BeatsPerCycle - 1 loop --todo das empty wird hier noch nicht verwendet
+              --  PushData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH) := vData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH);
+                push(ReceiveFifo, vData & vParam & '0');
+              --end loop;
             end if;
           when STREAM_BURST_WORD_PARAM_MODE =>
             -- todo
@@ -601,7 +600,7 @@ begin
             Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
         end case;
 
-        ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + BeatsPerCycle; -- todo here aswell
+        ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1; -- todo here aswell
         wait for 0 ns;
         log("received " & to_string(ReceivedWordsInCurrentBurst));
         if (ReceivedWordsInCurrentBurst = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit

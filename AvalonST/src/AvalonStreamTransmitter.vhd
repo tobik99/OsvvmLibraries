@@ -39,7 +39,7 @@ entity AvalonStreamTransmitter is
     Data : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     StartOfPacket : out std_logic := '0';
     EndOfPacket : out std_logic := '0';
-    Empty : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
+    Empty : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_WORD_WIDTH) - 1 downto 0) := (others => '0');
 
     Ready : in std_logic;
     Channel : out std_logic_vector(7 downto 0) := (others => '0');
@@ -69,7 +69,7 @@ architecture bhv of AvalonStreamTransmitter is
   signal ReadyAllowanceTransferCount : integer := 0;
   signal PacketTransfer : boolean := false;
   signal LastOffsetCount : integer := 0;
-  signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_WORD_WIDTH;
+  signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
   signal ParamChannel : std_logic_vector(Channel'range) := ifelse(INIT_CHANNEL'length > 0, INIT_CHANNEL, (Channel'range => '0'));
   signal ParamEmpty : std_logic_vector(Empty'range) := ifelse(INIT_EMPTY'length > 0, INIT_EMPTY, (Empty'range => '0'));
 
@@ -211,7 +211,7 @@ begin
                 Log(ModelID, "Packet Transfer set to false", INFO, TRUE);
               end if;
 
-            when BYTE_ORDER =>
+            when SYMBOL_ORDER =>
               ByteOrder <= TransRec.BoolToModel;
               wait for 0 ns;
               if (ByteOrder = true) then
@@ -233,7 +233,7 @@ begin
           case AvalonStreamOptionsType'val(TransRec.Options) is
             when PACKET_TRANSFER =>
               TransRec.BoolFromModel <= PacketTransfer;
-            when BYTE_ORDER =>
+            when SYMBOL_ORDER =>
               TransRec.BoolFromModel <= ByteOrder;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;

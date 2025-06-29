@@ -15,7 +15,7 @@ package AvalonStreamOptionsPkg is
   type AvalonStreamOptionsType is (
     READY_LATENCY,   -- Integer
     READY_ALLOWANCE, -- Integer
-    BYTE_ORDER,      -- Boolean
+    SYMBOL_ORDER,      -- Boolean
     PACKET_TRANSFER, -- Boolean
     SET_BURST_MODE,
     GET_BURST_MODE,
