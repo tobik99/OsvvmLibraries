@@ -123,7 +123,7 @@ package AvalonStreamComponentPkg is
     signal ScoreBoard : inout ScoreboardIdType;
     signal WordsInPacket : inout integer;
     constant BeatsPerCycle : in integer;
-    constant ByteOrder : in boolean;
+    constant SymbolOrder : in boolean;
     constant WordWidth : in integer;
     constant SymbolWidth : in integer;
     constant tpd_Clk_Ready : in time;
@@ -140,7 +140,7 @@ package AvalonStreamComponentPkg is
     variable EmptyBeats : inout integer;
     constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
-    constant ByteOrder : in boolean;
+    constant SymbolOrder : in boolean;
     constant WordWidth : in integer;
     constant SymbolWidth : in integer
   );
@@ -319,7 +319,7 @@ package body AvalonStreamComponentPkg is
     signal ScoreBoard : inout ScoreboardIdType;
     signal WordsInPacket : inout integer;
     constant BeatsPerCycle : in integer;
-    constant ByteOrder : in boolean;
+    constant SymbolOrder : in boolean;
     constant WordWidth : in integer;
     constant SymbolWidth : in integer;
     constant tpd_Clk_Ready : in time;
@@ -345,7 +345,7 @@ package body AvalonStreamComponentPkg is
       -- start of packet
       vData := Data;
 
-      if ByteOrder then
+      if SymbolOrder then
         ReverseSymbolOrder(vData, SymbolWidth, Data'length);
       end if;
 
@@ -371,7 +371,7 @@ package body AvalonStreamComponentPkg is
 
       if Valid = '1' then
         vData := Data;
-        if ByteOrder then
+        if SymbolOrder then
           ReverseSymbolOrder(vData, SymbolWidth, Data'length);
         end if;
         for i in 0 to BeatsPerCycle - 1 loop
@@ -465,37 +465,22 @@ package body AvalonStreamComponentPkg is
     variable EmptyBeats : inout integer;
     constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
-    constant ByteOrder : in boolean;
+    constant SymbolOrder : in boolean;
     constant WordWidth : in integer;
     constant SymbolWidth : in integer
   ) is
     variable vData : std_logic_vector(WordWidth - 1 downto 0) := (others => 'U');
+    variable vPopSymbolData : std_logic_vector(SymbolWidth - 1 downto 0) := (others => 'U');
     variable vEmptyBeats : integer := 0;
     variable vChannel : std_logic_vector(Channel'range);
     variable vEmpty : std_logic_vector(Empty'range);
     variable vLast : std_logic;
   begin
-    case BurstFifoMode is
-      when STREAM_BURST_WORD_MODE =>
-        for i in 0 to (BeatsPerCycle - 1) loop
-          if IsEmpty(Scoreboard) then
-            Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= (others => 'U');
-            vEmptyBeats := vEmptyBeats + 1;
-          else
-            (vData, vChannel, vEmpty, vLast) := Pop(Scoreboard);
-            if (ByteOrder = true) then
-              ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
-            end if;
-            Data((WordWidth - 1) + WordWidth * i downto WordWidth * i) <= vData;
-          end if;
-        end loop;
-      when others =>
-        vData(WordWidth - 1 downto 0) := Pop(Scoreboard);
-        if (ByteOrder = true) then
-          ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
-        end if;
-        Data(WordWidth - 1 downto 0) <= vData(WordWidth - 1 downto 0);
-    end case;
+     (vData, vChannel, vEmpty, vLast) := Pop(Scoreboard);
+    if (SymbolOrder = true and BurstFifoMode = STREAM_BURST_BYTE_MODE) then
+      ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
+    end if;
+    Data <= vData;
     Channel <= vChannel;
     Empty <= vEmpty;
     EmptyBeats := vEmptyBeats;

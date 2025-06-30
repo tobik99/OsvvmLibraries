@@ -69,7 +69,7 @@ architecture bhv of AvalonStreamReceiver is
   signal WaitForGet : boolean := true;
   signal ReadyLatency : integer := 0;
   signal ReadyAllowance : integer := 0;
-  signal ByteOrder : boolean := false; -- big endian is default
+  signal SymbolOrder : boolean := true; -- big endian is default
   signal PacketTransfer : boolean := false;
   signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
 
@@ -110,6 +110,7 @@ begin
     variable WordCount : integer;
     variable FifoWordCount, CheckWordCount : integer;
     variable BurstBoundary : std_logic;
+    variable DropUndriven : boolean := FALSE; -- used at BurstFifo byte-mode to drop "-" bits or keep them
     function param_to_string(Param : std_logic_vector) return string is
       alias aParam : std_logic_vector(Param'length - 1 downto 0) is Param;
       alias aChannel : std_logic_vector(CHANNEL_LEN - 1 downto 0) is aParam(PARAM_LENGTH - 1 downto PARAM_LENGTH - CHANNEL_LEN);
@@ -121,17 +122,14 @@ begin
     end function param_to_string;
   begin
     wait for 0 ns;
-    Log(ModelID, "AvalonStreamReceiver TransactionDispatcher started", INFO);
     TransRec.BurstFifo <= NewID("RxPacketFifo", ModelID, Search => PRIVATE_NAME);
 
     TransactionDispatcherLoop : loop
-      Log(ModelID, "TransactionDispatcher Loop", INFO);
       WaitForTransaction(
       Clk => Clk,
       Rdy => TransRec.Rdy,
       Ack => TransRec.Ack
       );
-      Log(ModelID, "TransactionDispatcher: Received Transaction", INFO);
 
       case Operation is
         when GET | TRY_GET | CHECK | TRY_CHECK =>
@@ -201,7 +199,7 @@ begin
             end if;
           end if;
         when GET_BURST | TRY_GET_BURST =>
-        Log(ModelID, "GET_BURST and TRY_GET_BURST are not supported in AvalonStreamReceiver", INFO);
+          Log(ModelID, "GET_BURST and TRY_GET_BURST are not supported in AvalonStreamReceiver", INFO);
           if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
             if not TryBurstWaiting then
               increment(BurstRequestCount);
@@ -213,9 +211,17 @@ begin
             TransRec.ParamFromModel <= (TransRec.ParamFromModel'range => '0');
             wait for 0 ns;
           else
-         
+
             if not TryBurstWaiting then
-              RequestWordsInCurrentBurst <= TransRec.IntToModel;
+              case BurstFifoMode is
+                when STREAM_BURST_BYTE_MODE =>
+                  RequestWordsInCurrentBurst <= TransRec.IntToModel / BeatsPerCycle;
+                when STREAM_BURST_WORD_MODE =>
+                  RequestWordsInCurrentBurst <= TransRec.IntToModel;
+                when others =>
+                  Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode), FAILURE);
+              end case;
+
               increment(BurstRequestCount);
             end if;
             TryBurstWaiting := FALSE;
@@ -223,10 +229,10 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-             
+
             if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
-             
+
               WaitForToggle(BurstReceiveCount);
             end if;
             FifoWordCount := 0;
@@ -242,8 +248,8 @@ begin
               Param := PopParam;
               case BurstFifoMode is
                 when STREAM_BURST_BYTE_MODE =>
-                  -- PushWord(TransRec.BurstFifo, Data, DropUndriven) ;
-                  -- FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven) ;
+                  PushWord(TransRec.BurstFifo, Data, DropUndriven);
+                  FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven);
                   log("using burst byte mode");
                 when STREAM_BURST_WORD_MODE =>
                   Push(TransRec.BurstFifo, Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0));
@@ -313,9 +319,11 @@ begin
               case BurstFifoMode is
                 when STREAM_BURST_BYTE_MODE =>
                   -- todo
-                  -- CheckWord(TransRec.BurstFifo, Data, DropUndriven);
-                  -- FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven);
-
+                  CheckWord(TransRec.BurstFifo, Data, DropUndriven);
+                  FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven);
+                  for j in 0 to BeatsPerCycle - 1 loop --todo das empty wird hier noch nicht verwendet
+                    Check(TransRec.BurstFifo, Data((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH));
+                  end loop;
                 when STREAM_BURST_WORD_MODE =>
                   Check(TransRec.BurstFifo, Data);
                   FifoWordCount := FifoWordCount + 1;
@@ -399,6 +407,12 @@ begin
           --!!  Get Pending Get Count = GetFifoCount(PacketFifo)
           TransRec.IntFromModel <= WordReceiveCount;
 
+        when SET_BURST_MODE =>
+          BurstFifoMode <= TransRec.IntToModel;
+          BurstFifoByteMode <= (TransRec.IntToModel = STREAM_BURST_BYTE_MODE);
+
+        when GET_BURST_MODE =>
+          TransRec.IntFromModel <= BurstFifoMode;
         when SET_MODEL_OPTIONS =>
           case AvalonStreamOptionsType'val(TransRec.Options) is
 
@@ -411,8 +425,8 @@ begin
                 Log(ModelID, "Packet Transfer set to false", INFO);
               end if;
             when SYMBOL_ORDER =>
-              ByteOrder <= TransRec.BoolToModel;
-              if (ByteOrder = true) then
+              SymbolOrder <= TransRec.BoolToModel;
+              if (SymbolOrder = true) then
                 Log(ModelID, "Byte Order set to Little Endian", INFO);
               else
                 Log(ModelID, "Byte Order set to Big Endian", INFO);
@@ -452,7 +466,7 @@ begin
             when PACKET_TRANSFER =>
               TransRec.BoolFromModel <= PacketTransfer;
             when SYMBOL_ORDER =>
-              TransRec.BoolFromModel <= ByteOrder;
+              TransRec.BoolFromModel <= SymbolOrder;
             when READY_ALLOWANCE =>
               TransRec.IntFromModel <= ReadyAllowance;
             when READY_LATENCY =>
@@ -490,10 +504,7 @@ begin
       if WaitForGet then
         -- if no request, wait until we have one
         if not ((BurstRequestCount > BurstReceiveCount)) then
-          Log(ModelID, "ReceiveHandler: Waiting for Get Request", INFO);
           wait until (BurstRequestCount > BurstReceiveCount) or not WaitForGet;
-          Log(ModelID, "ReceiveHandler: Get Request received", INFO);
-          -- push(ReceiveFifo, vData & vParam & '1'); -- marks the start of the burst
         end if;
       end if;
 
@@ -545,7 +556,6 @@ begin
         -- push burst boundary
         push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
 
-      
         increment(BurstReceiveCount);
         wait for 0 ns;
 
@@ -568,29 +578,19 @@ begin
         vChannel := Channel;
         vEmpty := Empty;
         vParam := vChannel & vEmpty & '0'; -- 0 is wildcard
-        if (ByteOrder = true) then
-          ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
-        end if;
-       
+
         case BurstFifoMode is
           when STREAM_BURST_BYTE_MODE =>
-            -- todo
-            -- PushWord(TransRec.BurstFifo, vData, DropUndriven) ;
-            -- ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + CountBytes(vData, DropUndriven) ;
-            log("using burst byte mode");
-          when STREAM_BURST_WORD_MODE =>
-
-            if BeatsPerCycle = 1 then
-              Log(ModelID,
-              "Received Word: " & to_hxstring(vData), INFO);
-              push(ReceiveFifo, vData & vParam & '0');
-            else
-              log("pushing beats per cycle: " & to_string(BeatsPerCycle));
-              --for j in 0 to BeatsPerCycle - 1 loop --todo das empty wird hier noch nicht verwendet
-              --  PushData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH) := vData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH);
-                push(ReceiveFifo, vData & vParam & '0');
-              --end loop;
+            if (SymbolOrder = true) then
+              ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
             end if;
+            PushData := (others => '-');
+            for j in BeatsPerCycle - 1 downto 0 loop --todo das empty wird hier noch nicht verwendet
+              PushData(7 downto 0) := vData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH);
+              push(ReceiveFifo, PushData & vParam & '0');
+            end loop;
+          when STREAM_BURST_WORD_MODE =>
+            push(ReceiveFifo, vData & vParam & '0');
           when STREAM_BURST_WORD_PARAM_MODE =>
             -- todo
             -- Push(TransRec.BurstFifo, vData & vParam(USER_LEN downto 1)) ;
