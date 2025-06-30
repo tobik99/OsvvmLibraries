@@ -53,7 +53,7 @@ end AvalonStreamReceiver;
 architecture bhv of AvalonStreamReceiver is
   constant CHANNEL_LEN : integer := Channel'length;
   constant EMPTY_LEN : integer := Empty'length;
-  constant PARAM_LENGTH : integer := CHANNEL_LEN + EMPTY_LEN + 1;
+  constant PARAM_LENGTH : integer := CHANNEL_LEN + EMPTY_LEN;
   constant EMPTY_RIGHT : integer := 1;
   constant CHANNEL_RIGHT : integer := EMPTY_LEN + 1;
   signal ModelID : AlertLogIDType;
@@ -73,10 +73,8 @@ architecture bhv of AvalonStreamReceiver is
   signal PacketTransfer : boolean := false;
   signal BeatsPerCycle : integer := AVALON_STREAM_DATA_WIDTH / AVALON_STREAM_SYMBOL_WIDTH;
 
-  signal LastOffsetCount : integer := 0;
   signal ParamChannel : std_logic_vector(Channel'range) := ifelse(INIT_CHANNEL'length > 0, INIT_CHANNEL, (Channel'range => '0'));
   signal ParamEmpty : std_logic_vector(Empty'range) := ifelse(INIT_EMPTY'length > 0, INIT_EMPTY, (Empty'range => '0'));
-  signal ParamLast : natural := INIT_LAST;
   constant DEFAULT_BURST_MODE : StreamFifoBurstModeType := STREAM_BURST_WORD_MODE;
   signal BurstFifoMode : StreamFifoBurstModeType := DEFAULT_BURST_MODE;
   signal BurstFifoByteMode : boolean := (DEFAULT_BURST_MODE = STREAM_BURST_BYTE_MODE);
@@ -178,8 +176,7 @@ begin
                                Param => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
                                ParamChannel => ParamChannel,
                                ParamEmpty => ParamEmpty, -- used for empty signal
-                               ParamLast => 0,
-                               Count => WordReceiveCount - LastOffsetCount
+                               Count => WordReceiveCount
                                );
               AffirmIf(DataCheckID,
               --                (Data ?= ExpectedData and Param ?= ExpectedParam) = '1',
@@ -218,6 +215,9 @@ begin
                   RequestWordsInCurrentBurst <= TransRec.IntToModel / BeatsPerCycle;
                 when STREAM_BURST_WORD_MODE =>
                   RequestWordsInCurrentBurst <= TransRec.IntToModel;
+                when STREAM_BURST_WORD_PARAM_MODE =>
+                 RequestWordsInCurrentBurst <= TransRec.IntToModel;
+                  
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode), FAILURE);
               end case;
@@ -250,19 +250,16 @@ begin
                 when STREAM_BURST_BYTE_MODE =>
                   PushWord(TransRec.BurstFifo, Data, DropUndriven);
                   FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven);
-                  log("using burst byte mode");
                 when STREAM_BURST_WORD_MODE =>
                   Push(TransRec.BurstFifo, Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0));
                   FifoWordCount := FifoWordCount + 1;
 
                 when STREAM_BURST_WORD_PARAM_MODE =>
-                  -- Push(TransRec.BurstFifo, Data & Param(USER_LEN downto 1)) ;
-                  -- FifoWordCount := FifoWordCount + 1 ;
-                  log("using burst word param mode");
+                  Push(TransRec.BurstFifo, Data & Param) ; -- Last and second Last is not used xD
+                  FifoWordCount := FifoWordCount + 1 ;
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
               end case;
-              exit when Param(0) = '1';
             end loop;
 
             -- Adjust WordRequestCount for the number of words consumed during the burst
@@ -377,7 +374,6 @@ begin
                              Param => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
                              ParamChannel => ParamChannel,
                              ParamEmpty => ParamEmpty, -- used for empty signal
-                             ParamLast => 0,
                              Count => 0
                              );
             if CHANNEL_LEN > 0 then
@@ -451,9 +447,6 @@ begin
             when DEFAULT_EMPTY =>
               ParamEmpty <= SafeResize(ModelID, TransRec.ParamToModel, ParamEmpty'length);
 
-            when DEFAULT_LAST =>
-              ParamLast <= TransRec.IntToModel;
-              LastOffsetCount <= WordReceiveCount;
 
             when others =>
               Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
@@ -523,7 +516,7 @@ begin
           vData := Data;
           vChannel := Channel;
           vEmpty := Empty;
-          vParam := vChannel & vEmpty & '0'; -- 0 is wildcard
+          vParam := vChannel & vEmpty; -- 0 is wildcard
           push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
 
           Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
@@ -543,7 +536,7 @@ begin
             vData := Data;
             vChannel := Channel;
             vEmpty := Empty;
-            vParam := vChannel & vEmpty & '0'; -- 0 is wildcard
+            vParam := vChannel & vEmpty; -- 0 is wildcard
             push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
             Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
             exit when EndOfPacket = '1';
@@ -577,7 +570,7 @@ begin
         vData := Data;
         vChannel := Channel;
         vEmpty := Empty;
-        vParam := vChannel & vEmpty & '0'; -- 0 is wildcard
+        vParam := vChannel & vEmpty; -- 0 is wildcard
 
         case BurstFifoMode is
           when STREAM_BURST_BYTE_MODE =>
@@ -592,10 +585,7 @@ begin
           when STREAM_BURST_WORD_MODE =>
             push(ReceiveFifo, vData & vParam & '0');
           when STREAM_BURST_WORD_PARAM_MODE =>
-            -- todo
-            -- Push(TransRec.BurstFifo, vData & vParam(USER_LEN downto 1)) ;
-            -- ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1 ;
-            log("using burst word param mode");
+            push(ReceiveFifo, vData & vParam & '0');
           when others =>
             Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
         end case;

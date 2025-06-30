@@ -123,7 +123,6 @@ begin
                    Param => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
                    ParamChannel => ParamChannel,
                    ParamEmpty => ParamEmpty, -- used for empty signal
-                   ParamLast => 1,
                    Count => ((TransmitRequestCount + 1) - LastOffsetCount)
                    );
           Push(TransmitFifo, vData & Param);
@@ -140,7 +139,6 @@ begin
                    Param => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
                    ParamChannel => ParamChannel,
                    ParamEmpty => ParamEmpty, -- used for empty signal
-                   ParamLast => 1,
                    Count => ((TransmitRequestCount + 1) - LastOffsetCount)
                    );
           if BurstFifoByteMode then
@@ -150,7 +148,7 @@ begin
             NumberTransfers := TransRec.IntToModel;
           end if;
           TransmitRequestCount <= TransmitRequestCount + NumberTransfers;
-          Last := Param(0);
+        
           for i in NumberTransfers - 1 downto 0 loop
             case BurstFifoMode is
               when STREAM_BURST_BYTE_MODE =>
@@ -160,15 +158,10 @@ begin
                 vData := Pop(TransRec.BurstFifo);
 
               when STREAM_BURST_WORD_PARAM_MODE =>
-                -- (vData, User)                := Pop(TransRec.BurstFifo);
-                -- Param(User'length downto 1) := User;
-
+                (vData, Param)                := Pop(TransRec.BurstFifo);
               when others =>
                 Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
             end case;
-            --Last            Param(0) := '1' when i = 0 else '0' ;  -- TLast
-            Param(0) := Last when i = 0 else
-                        '0'; -- TLast
 
             Push(TransmitFifo, vData & Param);
           end loop;
@@ -257,7 +250,6 @@ begin
 
     TransmitLoop : loop
       if IsEmpty(TransmitFifo) and TransmitRequestCount <= TransmitDoneCount then
-        Log(ModelID, "AvalonStream Transmitter: No data to transmit", INFO);
         wait on TransmitRequestCount;
       end if;
       if PacketTransfer and (TransmitRequestCount > TransmitDoneCount) then

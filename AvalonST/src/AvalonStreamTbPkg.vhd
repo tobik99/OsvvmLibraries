@@ -60,7 +60,6 @@ package AvalonStreamTbPkg is
     Param     : std_logic_vector ;
     ParamChannel   : std_logic_vector ; 
     ParamEmpty : std_logic_vector ; 
-    ParamLast : integer ;
     Count     : integer 
   ) return std_logic_vector ;
 
@@ -75,7 +74,6 @@ package body AvalonStreamTbPkg is
     Param     : std_logic_vector ;
     ParamChannel   : std_logic_vector ; 
     ParamEmpty : std_logic_vector ; 
-    ParamLast : integer ;
     Count     : integer 
   ) return std_logic_vector is
     constant PARAM_LEN : integer := Param'length ; 
@@ -85,7 +83,6 @@ package body AvalonStreamTbPkg is
     
     constant Channel_RIGHT    : integer := Empty_LEN + 1 ; 
     constant Empty_RIGHT  : integer := 1 ;
-    alias Last  : std_logic is ResultParam(0) ;
   begin    
     ResultParam := Param ;
     
@@ -97,15 +94,6 @@ package body AvalonStreamTbPkg is
       ResultParam(Channel_RIGHT-1 downto Empty_RIGHT) := ParamEmpty ; 
     end if ; 
     
-    -- Calculate Last.  
-    if Last = '-' then  -- use defaults
-      if ParamLast <= 1 then 
-        Last := '1' when ParamLast = 1 else '0' ; 
-      else 
-        -- generate last once every ParamLast cycles
-        Last := '1' when (Count mod ParamLast) = 0 else '0' ; 
-      end if ; 
-    end if ; 
     return ResultParam ; 
   end function UpdateOptions ; 
     
