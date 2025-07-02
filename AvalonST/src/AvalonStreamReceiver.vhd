@@ -54,8 +54,8 @@ architecture bhv of AvalonStreamReceiver is
   constant CHANNEL_LEN : integer := Channel'length;
   constant EMPTY_LEN : integer := Empty'length;
   constant PARAM_LENGTH : integer := CHANNEL_LEN + EMPTY_LEN;
-  constant EMPTY_RIGHT : integer := 1;
-  constant CHANNEL_RIGHT : integer := EMPTY_LEN + 1;
+  constant EMPTY_RIGHT : integer := 0;
+  constant CHANNEL_RIGHT : integer := EMPTY_LEN;
   signal ModelID : AlertLogIDType;
   signal DataCheckID : AlertLogIDType;
   signal WordRequestCount, WordReceiveCount : integer := 0;

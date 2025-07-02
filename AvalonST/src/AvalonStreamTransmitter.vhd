@@ -138,9 +138,10 @@ begin
           Param := UpdateOptions(
                    Param => SafeResize(ModelID, TransRec.ParamToModel, TransRec.ParamToModel'length),
                    ParamChannel => ParamChannel,
-                   ParamEmpty => ParamEmpty, -- used for empty signal
+                   ParamEmpty => ParamEmpty,
                    Count => ((TransmitRequestCount + 1) - LastOffsetCount)
                    );
+                   
           if BurstFifoByteMode then
             BytesToSend := TransRec.IntToModel;
             NumberTransfers := integer(ceil(real(TransRec.IntToModel) / real(BeatsPerCycle)));
@@ -150,11 +151,13 @@ begin
           TransmitRequestCount <= TransmitRequestCount + NumberTransfers;
         
           for i in NumberTransfers - 1 downto 0 loop
+            
             case BurstFifoMode is
               when STREAM_BURST_BYTE_MODE =>
                 PopWord(TransRec.BurstFifo, PopValid, vData, BytesToSend);
                 AlertIfNot(ModelID, PopValid, "BurstFifo Empty during burst transfer", FAILURE);
               when STREAM_BURST_WORD_MODE =>
+
                 vData := Pop(TransRec.BurstFifo);
 
               when STREAM_BURST_WORD_PARAM_MODE =>
@@ -270,11 +273,13 @@ begin
           "  EOP: " & to_string(EndOfPacket),
           DEBUG
           );
+          Log(ModelID, "Do Handshake", INFO, TRUE);
           DoAvalonStreamValidHandshake(
           Clk, Valid, Ready, StartOfNewStream,
           ReadyLatency, ReadyAllowance, ReadyAllowanceTransferCount, tpd_Clk_Valid, ModelID,
           "Packet Valid Handshake Timeout", 0 ns
           );
+          Log(ModelID, "handhsake done", INFO, TRUE);
 
           -- Nach erstem Wort SOP zur�cksetzen
           StartOfPacket <= '0' after tpd_Clk_StartOfPacket;

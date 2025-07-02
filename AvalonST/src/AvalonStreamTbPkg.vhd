@@ -81,8 +81,8 @@ package body AvalonStreamTbPkg is
     constant Empty_LEN  : integer := ParamEmpty'length ; 
     variable ResultParam : std_logic_vector(PARAM_LEN -1 downto 0) ; 
     
-    constant Channel_RIGHT    : integer := Empty_LEN + 1 ; 
-    constant Empty_RIGHT  : integer := 1 ;
+    constant Channel_RIGHT    : integer := Empty_LEN; 
+    constant Empty_RIGHT  : integer := 0 ;
   begin    
     ResultParam := Param ;
     

@@ -147,7 +147,7 @@ package AvalonStreamComponentPkg is
 
   procedure WaitForReady (
     signal Ready : in std_logic;
-    constant TimeOut : in time;
+    constant TimeOut : in time := 0 sec;
     constant AlertLogID : in AlertLogIDType;
     constant Msg : in string
   );
@@ -199,6 +199,8 @@ package body AvalonStreamComponentPkg is
         Valid <= '1' after tpd_Clk_Valid;
         ReadyAllowanceTransferCount <= ReadyAllowance;
       end if;
+    elsif(Ready = '1') then
+      Valid <= '1' after tpd_Clk_Valid;
     end if;
     -- if Ready = '1' then
     --   Valid <= '1' after tpd_Clk_Valid;
@@ -235,7 +237,7 @@ package body AvalonStreamComponentPkg is
     --   end if;
     -- end if;
 
-    wait until Clk = '1';
+    wait on clk until Clk = '1';
   end procedure;
 
   ------------------------------------------------------------
@@ -397,7 +399,7 @@ package body AvalonStreamComponentPkg is
   -------------------------------------------------------------
   procedure WaitForReady (
     signal Ready : in std_logic;
-    constant TimeOut : in time;
+    constant TimeOut : in time := 0 sec;
     constant AlertLogID : in AlertLogIDType;
     constant Msg : in string
   ) is
@@ -474,9 +476,8 @@ package body AvalonStreamComponentPkg is
     variable vEmptyBeats : integer := 0;
     variable vChannel : std_logic_vector(Channel'range);
     variable vEmpty : std_logic_vector(Empty'range);
-    variable vLast : std_logic;
   begin
-     (vData, vChannel, vEmpty, vLast) := Pop(Scoreboard);
+     (vData, vChannel, vEmpty) := Pop(Scoreboard);
     if (SymbolOrder = true and BurstFifoMode = STREAM_BURST_BYTE_MODE) then
       ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
     end if;
