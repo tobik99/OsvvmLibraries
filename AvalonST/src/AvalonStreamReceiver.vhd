@@ -121,7 +121,7 @@ begin
   begin
     wait for 0 ns;
     TransRec.BurstFifo <= NewID("RxPacketFifo", ModelID, Search => PRIVATE_NAME);
-
+    ReceiveFifo <= NewID("ReceiveFifo", ModelID, Search => PRIVATE_NAME);
     TransactionDispatcherLoop : loop
       WaitForTransaction(
       Clk => Clk,
@@ -282,7 +282,6 @@ begin
             " Last Data: " & to_hxstring(Data) & param_to_string(Param),
             INFO, TransRec.BoolToModel or IsLogEnabled(ModelID, PASSED)
             );
-            wait for 0 ns;
           end if;
         when CHECK_BURST | TRY_CHECK_BURST =>
           if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
@@ -324,7 +323,7 @@ begin
                   -- todo
                   CheckWord(TransRec.BurstFifo, Data, DropUndriven);
                   FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven);
-                  for j in 0 to BeatsPerCycle - 1 loop --todo das empty wird hier noch nicht verwendet
+                  for j in 0 to BeatsPerCycle - 1 loop
                     Check(TransRec.BurstFifo, Data((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH));
                   end loop;
                 when STREAM_BURST_WORD_MODE =>
@@ -407,7 +406,7 @@ begin
         when SET_BURST_MODE =>
           BurstFifoMode <= TransRec.IntToModel;
           BurstFifoByteMode <= (TransRec.IntToModel = STREAM_BURST_BYTE_MODE);
-
+          Log(ModelID, "AvalonStreamTransmitter: BurstFifoMode set to " & to_string(BurstFifoMode), INFO, TRUE);
         when GET_BURST_MODE =>
           TransRec.IntFromModel <= BurstFifoMode;
         when SET_MODEL_OPTIONS =>
@@ -492,7 +491,6 @@ begin
     wait for 0 ns;
     wait for 0 ns; -- ensure that the scoreboards are initialized.
 
-    --WaitForBarrier(OsvvmVcInit);
     ReceiveLoop : loop
       if WaitForGet then
         -- if no request, wait until we have one
@@ -505,46 +503,78 @@ begin
         -- Packet Mode
         -- start of procedure
         DoAvalonStreamReadyHandshake(Clk, Valid, Ready, RequestWordsInCurrentBurst, ReceivedWordsInCurrentBurst, tpd_Clk_Ready, ModelID);
+        vData := Data;
+        vChannel := Channel;
+        vEmpty := Empty;
+        vParam := vChannel & vEmpty;
+        case BurstFifoMode is
+          when STREAM_BURST_BYTE_MODE =>
+            if (SymbolOrder = true) then
+              ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
+            end if;
+            PushData := (others => '-');
+            for j in BeatsPerCycle - 1 downto 0 loop
+              PushData(7 downto 0) := vData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH);
+              push(ReceiveFifo, PushData & vParam & '0');
+            end loop;
+          when STREAM_BURST_WORD_MODE =>
+            push(ReceiveFifo, vData & vParam & '0');
+          when STREAM_BURST_WORD_PARAM_MODE =>
+            push(ReceiveFifo, vData & vParam & '0');
+          when others =>
+            Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
+        end case;
         ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1;
         if StartOfPacket /= '1' then
           Alert(ModelID, "StartOfPacket is not set to 1 at the beginning of a packet transfer!", FAILURE);
         end if;
         -- start of packet
-        vData := Data;
-        vChannel := Channel;
-        vEmpty := Empty;
-        vParam := vChannel & vEmpty; -- 0 is wildcard
-        push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
+
         if EndOfPacket = '1' then
           -- Single-word packet: skip second loop
           Ready <= '0' after tpd_Clk_Ready;
           push(ReceiveFifo, vData & vParam & '1'); -- mark as last
           increment(BurstReceiveCount);
           ReceivedWordsInCurrentBurst <= 0;
-          Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
+          Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData) & "  SOP: " & to_string(StartOfPacket) & "  EOP: " & to_string(EndOfPacket), INFO);
           wait on clk until clk = '1';
           exit;
         end if;
-        Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
+        Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData) & "  SOP: " & to_string(StartOfPacket) & "  EOP: " & to_string(EndOfPacket), INFO);
 
         loop
           -- in packet
           DoAvalonStreamReadyHandshake(Clk, Valid, Ready, RequestWordsInCurrentBurst, ReceivedWordsInCurrentBurst, tpd_Clk_Ready, ModelID);
-          ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1;
-
           vData := Data;
           vChannel := Channel;
           vEmpty := Empty;
-          vParam := vChannel & vEmpty; -- 0 is wildcard
-          push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
-          Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
+          vParam := vChannel & vEmpty;
+          case BurstFifoMode is
+            when STREAM_BURST_BYTE_MODE =>
+              if (SymbolOrder = true) then
+                ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
+              end if;
+              PushData := (others => '-');
+              for j in BeatsPerCycle - 1 downto 0 loop
+                PushData(7 downto 0) := vData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH);
+                push(ReceiveFifo, PushData & vParam & '0');
+              end loop;
+            when STREAM_BURST_WORD_MODE =>
+              push(ReceiveFifo, vData & vParam & '0');
+            when STREAM_BURST_WORD_PARAM_MODE =>
+              push(ReceiveFifo, vData & vParam & '0');
+            when others =>
+              Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
+          end case;
+          ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1;
+
+          Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData) & "  SOP: " & to_string(StartOfPacket) & "  EOP: " & to_string(EndOfPacket), INFO);
           if (ReceivedWordsInCurrentBurst + 1 = RequestWordsInCurrentBurst) then
             if EndOfPacket /= '1' then
               Alert(ModelID, "EndOfPacket is not set to 1 at the end of a packet transfer!", FAILURE);
             end if;
           end if;
           exit when EndOfPacket = '1';
-
         end loop;
         Ready <= '0' after tpd_Clk_Ready;
         -- packet received
@@ -553,15 +583,14 @@ begin
         ReceivedWordsInCurrentBurst <= 0;
         increment(BurstReceiveCount);
         wait on clk until clk = '1';
-
-      elsif BurstReceiveCount < BurstRequestCount and ReceivedWordsInCurrentBurst < RequestWordsInCurrentBurst and not PacketTransfer then
+      elsif BurstReceiveCount < BurstRequestCount and not PacketTransfer then
 
         -- normal receive mode
         DoAvalonStreamReadyHandshake(Clk, Valid, Ready, RequestWordsInCurrentBurst, ReceivedWordsInCurrentBurst, tpd_Clk_Ready, ModelID);
         vData := Data;
         vChannel := Channel;
         vEmpty := Empty;
-        vParam := vChannel & vEmpty; -- 0 is wildcard
+        vParam := vChannel & vEmpty;
 
         case BurstFifoMode is
           when STREAM_BURST_BYTE_MODE =>
@@ -569,7 +598,7 @@ begin
               ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
             end if;
             PushData := (others => '-');
-            for j in BeatsPerCycle - 1 downto 0 loop --todo das empty wird hier noch nicht verwendet
+            for j in BeatsPerCycle - 1 downto 0 loop
               PushData(7 downto 0) := vData((j + 1) * AVALON_STREAM_SYMBOL_WIDTH - 1 downto j * AVALON_STREAM_SYMBOL_WIDTH);
               push(ReceiveFifo, PushData & vParam & '0');
             end loop;
@@ -595,7 +624,6 @@ begin
           to_string(ReceivedWordsInCurrentBurst) & " > " & to_string(RequestWordsInCurrentBurst), FAILURE);
         end if;
       else
-        wait for 10 ns;
         Alert(ModelID, "AvalonStreamReceiver: No Word or Packet request was received!", FAILURE);
       end if;
     end loop ReceiveLoop;

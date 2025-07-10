@@ -104,30 +104,11 @@ package AvalonStreamComponentPkg is
     constant TimeOutPeriod : in time := -1 sec
   );
 
-  procedure DoAvalonStreamPacketReadyHandshake (
-    signal Clk : in std_logic;
-    signal Valid : in std_logic;
-    signal Ready : inout std_logic;
-    signal StartOfPacket : in std_logic;
-    signal EndOfPacket : in std_logic;
-    signal Data : in std_logic_vector;
-    signal ScoreBoard : inout ScoreboardIdType;
-    signal WordsInPacket : inout integer;
-    constant BeatsPerCycle : in integer;
-    constant SymbolOrder : in boolean;
-    constant WordWidth : in integer;
-    constant SymbolWidth : in integer;
-    constant tpd_Clk_Ready : in time;
-    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage : in string := "";
-    constant TimeOutPeriod : in time := -1 sec
-  );
-
   procedure DoPrepareTransmitData (
     signal Data : out std_logic_vector;
     signal Channel : out std_logic_vector;
     signal Empty : out std_logic_vector;
-    signal Scoreboard : inout ScoreboardIdType;
+    signal TransmitFifo : inout ScoreboardIdType;
     variable EmptyBeats : inout integer;
     constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
@@ -176,12 +157,10 @@ package body AvalonStreamComponentPkg is
     if (Ready /= '1') then -- source has to assert valid before ready
       Valid <= '1' after tpd_Clk_Valid;
       WaitForReady(Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-      else
-         Valid <= '1' after tpd_Clk_Valid;
+    else
+      Valid <= '1' after tpd_Clk_Valid;
     end if;
- 
     wait on clk until Clk = '1';
-     wait for 0 ns;
   end procedure;
 
   ------------------------------------------------------------
@@ -205,93 +184,6 @@ package body AvalonStreamComponentPkg is
     wait on clk until clk = '1';
   end procedure DoAvalonStreamReadyHandshake;
 
-  ------------------------------------------------------------
-
-  procedure DoAvalonStreamPacketReadyHandshake (
-    signal Clk : in std_logic;
-    signal Valid : in std_logic;
-    signal Ready : inout std_logic;
-    signal StartOfPacket : in std_logic;
-    signal EndOfPacket : in std_logic;
-    signal Data : in std_logic_vector;
-    signal ScoreBoard : inout ScoreboardIdType;
-    signal WordsInPacket : inout integer;
-    constant BeatsPerCycle : in integer;
-    constant SymbolOrder : in boolean;
-    constant WordWidth : in integer;
-    constant SymbolWidth : in integer;
-    constant tpd_Clk_Ready : in time;
-    constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
-    constant TimeOutMessage : in string := "";
-    constant TimeOutPeriod : in time := -1 sec
-  ) is
-    variable vData : std_logic_vector(Data'range) := (others => 'U');
-    -- variable vParam        : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
-    -- variable vChannel      : std_logic_vector(Channel'range) := (Channel'range => '0');
-    -- variable vEmpty        : std_logic_vector(Empty'range)   := (Empty'range   => '0');
-  begin
-    WordsInPacket <= 0;
-    loop
-      Ready <= '1' after tpd_Clk_Ready;
-
-      if TimeOutPeriod > 0 sec then
-        -- todo das warten auf clk = 1 könnte fehlerhaft sein!
-        wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1' for TimeOutPeriod;
-      else
-        wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
-      end if;
-      -- start of packet
-      vData := Data;
-
-      if SymbolOrder then
-        ReverseSymbolOrder(vData, SymbolWidth, Data'length);
-      end if;
-
-      for i in 0 to BeatsPerCycle - 1 loop
-        push(
-        ScoreBoard,
-        vData((i + 1) * WordWidth - 1 downto i * WordWidth)
-        );
-      end loop;
-      Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
-      WordsInPacket <= WordsInPacket + 1;
-      exit when Valid = '1' and StartOfPacket = '1';
-    end loop;
-    loop
-      -- in packet
-      Ready <= '1' after tpd_Clk_Ready;
-
-      if TimeOutPeriod > 0 sec then
-        wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
-      else
-        wait on Clk until Clk = '1' and Valid = '1';
-      end if;
-
-      if Valid = '1' then
-        vData := Data;
-        if SymbolOrder then
-          ReverseSymbolOrder(vData, SymbolWidth, Data'length);
-        end if;
-        for i in 0 to BeatsPerCycle - 1 loop
-          push(
-          ScoreBoard,
-          vData((i + 1) * WordWidth - 1 downto i * WordWidth)
-          );
-        end loop;
-        Log(AlertLogID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
-        WordsInPacket <= WordsInPacket + 1;
-        wait for 0 ns;
-        exit when EndOfPacket = '1';
-      else
-        Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
-      end if;
-    end loop;
-    Ready <= '0' after tpd_Clk_Ready;
-    -- packet received
-    -- push burst boundary
-    push(ScoreBoard, vData);
-    wait for 0 ns;
-  end procedure;
   -------------------------------------------------------------
   procedure WaitForReady (
     signal Ready : in std_logic;
@@ -359,7 +251,7 @@ package body AvalonStreamComponentPkg is
     signal Data : out std_logic_vector;
     signal Channel : out std_logic_vector;
     signal Empty : out std_logic_vector;
-    signal Scoreboard : inout ScoreboardIdType;
+    signal TransmitFifo : inout ScoreboardIdType;
     variable EmptyBeats : inout integer;
     constant BurstFifoMode : in StreamFifoBurstModeType;
     constant BeatsPerCycle : in integer;
@@ -372,13 +264,13 @@ package body AvalonStreamComponentPkg is
     variable vChannel : std_logic_vector(Channel'range);
     variable vEmpty : std_logic_vector(Empty'range);
   begin
-     (vData, vChannel, vEmpty) := Pop(Scoreboard);
-    if (SymbolOrder = true and BurstFifoMode = STREAM_BURST_BYTE_MODE) then
-      ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
-    end if;
-    Data <= vData;
-    Channel <= vChannel;
-    Empty <= vEmpty;
-    EmptyBeats := vEmptyBeats;
+      (vData, vChannel, vEmpty) := Pop(TransmitFifo);
+      if (SymbolOrder = true and BurstFifoMode = STREAM_BURST_BYTE_MODE) then
+        ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
+      end if;
+      Data <= vData;
+      Channel <= vChannel;
+      Empty <= vEmpty;
+      EmptyBeats := vEmptyBeats;
   end procedure;
 end package body AvalonStreamComponentPkg;
