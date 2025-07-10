@@ -39,7 +39,7 @@ entity AvalonStreamTransmitter is
     Data : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     StartOfPacket : out std_logic := '0';
     EndOfPacket : out std_logic := '0';
-    Empty : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_WORD_WIDTH) - 1 downto 0) := (others => '0');
+    Empty : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
 
     Ready : in std_logic;
     Channel : out std_logic_vector(7 downto 0) := (others => '0');
@@ -317,6 +317,7 @@ begin
           StartOfNewStream <= 1;
           Valid <= '0' after tpd_Clk_Valid;
           Data <= (others => 'X');
+          wait on clk until clk = '1';
         else
           StartOfNewStream <= 0;
         end if;

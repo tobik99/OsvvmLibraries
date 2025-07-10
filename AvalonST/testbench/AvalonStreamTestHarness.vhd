@@ -12,16 +12,16 @@ architecture bhv of AvalonStreamTestHarness is
 
   constant tperiod_Clk             : time    := 10 ns;
   constant tpd                     : time    := 2 ns;
-  constant AvalonStreamDataWidth   : integer := 32;
-  constant AvalonStreamWordWidth   : integer := 32;
-  constant AvalonStreamSymbolWidth : integer := 16;
+  constant AvalonStreamDataWidth   : integer := 16;
+  constant AvalonStreamWordWidth   : integer := 16;
+  constant AvalonStreamSymbolWidth : integer := 8;
 
   constant TCHANNEL_MAX_WIDTH : integer := 8; -- maximum number of AvalonStream channels
   constant TEMPTY_MAX_WIDTH   : integer := AvalonStreamDataWidth/AvalonStreamSymbolWidth;
 
   constant INIT_CHANNEL    : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0) := (others => '0');
   constant INIT_EMPTY      : std_logic_vector(TEMPTY_MAX_WIDTH - 1 downto 0)   := (others => '0');
-  constant AXI_PARAM_WIDTH : integer                                           := TCHANNEL_MAX_WIDTH + TEMPTY_MAX_WIDTH + 1;
+  constant AXI_PARAM_WIDTH : integer                                           := TCHANNEL_MAX_WIDTH + TEMPTY_MAX_WIDTH;
   signal Clk               : std_logic                                         := '1';
   signal Reset             : std_logic                                         := '0';
 

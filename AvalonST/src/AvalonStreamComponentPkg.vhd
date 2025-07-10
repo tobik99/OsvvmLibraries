@@ -259,44 +259,6 @@ package body AvalonStreamComponentPkg is
   ) is
     variable UseReadyAllowance : boolean := false;
   begin
-    -- if ReadyBeforeValid then
-    --   Ready <= '1' after tpd_Clk_Ready;
-    -- else
-    --   Ready <= '0' after tpd_Clk_Ready;
-    -- end if;
-    -- StartOfNewStream <= 0;
-    -- if (ReadyAllowance > 0) and (WordRequestCount - ReadyAllowance > 0) and ((WordReceiveCount + ReadyAllowance) >= WordRequestCount) then
-    --   Ready <= '0' after tpd_Clk_Ready;
-    -- end if;
-
-    -- -- Wait to Receive Transaction
-    -- if TimeOutPeriod > 0 sec then
-    --   wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
-    -- else
-    --   wait on Clk until Clk = '1' and Valid = '1';
-    -- end if;
-
-    -- if Valid = '1' then
-    --   if ReadyAllowance > 0 and (WordReceiveCount + ReadyAllowance >= WordRequestCount) then
-    --     AlertIf(AlertLogID, Valid /= '1', "this alert should never be reached", FAILURE);
-    --   else
-    --     if not ReadyBeforeValid then
-    --       Ready <= '1' after tpd_Clk_Ready;
-    --     end if;
-    --     -- If ready not signaled yet, find ready at a rising edge of clk
-    --     if Ready /= '1' then
-    --       wait on Clk until Clk = '1' and (Ready = '1' or Valid /= '1');
-    --       AlertIf(AlertLogID, Valid /= '1', TimeOutMessage & " Valid (" & to_string(Valid) & ") " &
-    --       "deasserted before Ready asserted (" & to_string(Ready) & ") ",
-    --       FAILURE
-    --       );
-    --     end if;
-    --   end if;
-    -- else
-    --   -- TimeOut handling
-    --   Alert(AlertLogID, TimeOutMessage & " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
-    -- end if;
-    --Ready <= '1' after tpd_Clk_Ready;
     if (WordRequestCount = WordReceiveCount) then
       StartOfNewStream <= 1;
       WordReceiveCount <= 0;
@@ -306,7 +268,7 @@ package body AvalonStreamComponentPkg is
       WaitForValid(Valid, TimeOutPeriod, AlertLogID, TimeOutMessage);
     end if;
     Ready <= '1' after tpd_Clk_Ready;
-    wait until Clk = '1';
+    wait until clk = '1';
   end procedure DoAvalonStreamReadyHandshake;
 
   ------------------------------------------------------------

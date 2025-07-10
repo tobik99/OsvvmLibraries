@@ -36,7 +36,7 @@ entity AvalonStreamReceiver is
 
     StartOfPacket : in std_logic := '0';
     EndOfPacket : in std_logic := '0';
-    Empty : in std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_WORD_WIDTH) - 1 downto 0) := (others => '0');
+    Empty : in std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
     Channel : in std_logic_vector(7 downto 0) := (others => '0');
     -- testbench record
     TransRec : inout StreamRecType
@@ -193,7 +193,6 @@ begin
             end if;
           end if;
         when GET_BURST | TRY_GET_BURST =>
-          Log(ModelID, "GET_BURST and TRY_GET_BURST are not supported in AvalonStreamReceiver", INFO);
           if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
             if not TryBurstWaiting then
               increment(BurstRequestCount);
@@ -591,7 +590,7 @@ begin
           Ready <= '0' after tpd_Clk_Ready; -- end of burst
           push(ReceiveFifo, PushData & vParam & '1'); -- marks the end of the burst 
           ReceivedWordsInCurrentBurst <= 0; -- reset for next burst
-          wait for 0 ns;
+          wait on clk until clk = '1';
         elsif (ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst) then
           wait for 10 ns;
           Alert(ModelID, "ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst: " &
