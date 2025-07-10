@@ -1,5 +1,5 @@
 
-architecture AvalonStreamSendGetTest of AvalonST_TestCtrl is
+architecture AvalonStreamSendGet of AvalonST_TestCtrl is
   signal scoreboard : ScoreboardIDType;
   signal TestDone : integer_barrier := 1;
 begin
@@ -11,8 +11,7 @@ begin
   ControlProc : process
   begin
     -- Initialization of test
-
-    SetTestName("AvalonStreamSendGetTest");
+    SetTestName("AvalonStreamSendGet");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE); -- Enable INFO logs
     -- Scoreboard initialization
@@ -40,7 +39,6 @@ begin
     variable CheckDataWord : std_logic_vector(31 downto 0);
   begin
     wait until Reset = '1';
-    wait for 0 ns;
 
     --   -- Send and Get    
     log("Transmit 5 words");
@@ -48,7 +46,7 @@ begin
     for I in 1 to 5 loop
       Send(StreamTxRec, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)));
     end loop;
-
+      WaitForTransaction(StreamTxRec);
     WaitForClock(StreamTxRec, 2);
 
     -- -- Send and Check    
@@ -106,7 +104,7 @@ begin
   begin
     wait until Reset = '1';
 
-    -- log("Get 5 words") ;
+   -- log("Get 5 words") ;
     CheckDataWord := x"0000_0000";
     for I in 1 to 5 loop
       Get(StreamRxRec, RxData);
@@ -150,12 +148,12 @@ begin
     wait;
   end process receiver_proc;
 
-end architecture AvalonStreamSendGetTest;
+end architecture AvalonStreamSendGet;
 
-configuration AvalonStreamSendGetTest of AvalonStreamTestHarness is
+configuration AvalonStreamSendGet of AvalonStreamTestHarness is
   for bhv
     for TestCtrl_1 : AvalonST_TestCtrl
-      use entity osvvm_avalonst.AvalonST_TestCtrl(AvalonStreamSendGetTest);
+      use entity osvvm_avalonst.AvalonST_TestCtrl(AvalonStreamSendGet);
     end for;
   end for;
-end AvalonStreamSendGetTest;
+end AvalonStreamSendGet;

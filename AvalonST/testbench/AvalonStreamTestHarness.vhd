@@ -12,8 +12,7 @@ architecture bhv of AvalonStreamTestHarness is
 
   constant tperiod_Clk             : time    := 10 ns;
   constant tpd                     : time    := 2 ns;
-  constant AvalonStreamDataWidth   : integer := 16;
-  constant AvalonStreamWordWidth   : integer := 16;
+  constant AvalonStreamDataWidth   : integer := 32;
   constant AvalonStreamSymbolWidth : integer := 8;
 
   constant TCHANNEL_MAX_WIDTH : integer := 8; -- maximum number of AvalonStream channels
@@ -77,7 +76,6 @@ begin
       INIT_EMPTY                 => INIT_EMPTY,
       AVALON_STREAM_DATA_WIDTH   => AvalonStreamDataWidth,
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
-      AVALON_STREAM_WORD_WIDTH   => AvalonStreamWordWidth,
       DEFAULT_DELAY              => 1 ns,
       tpd_Clk_Valid              => 1 ns,
       tpd_Clk_Data               => 1 ns
@@ -100,7 +98,6 @@ begin
       MODEL_ID_NAME              => "AvalonSreamReceiver",
       AVALON_STREAM_DATA_WIDTH   => AvalonStreamDataWidth,
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
-      AVALON_STREAM_WORD_WIDTH   => AvalonStreamWordWidth,
       DEFAULT_DELAY              => 1 ns,
       tpd_Clk_Ready             => 1 ns
     )

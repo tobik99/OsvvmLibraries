@@ -19,8 +19,7 @@ entity AvalonStreamReceiver is
     INIT_LAST : natural := 0;
     MODEL_ID_NAME : string := "";
     AVALON_STREAM_DATA_WIDTH : integer range 1 to 8192 := 32;
-    AVALON_STREAM_WORD_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 32;
-    AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 16;
+    AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 8;
     AVALON_STREAM_ERROR : integer range 1 to 256 := 1;
     tperiod_Clk : time := 10 ns;
     DEFAULT_DELAY : time := 1 ns;
@@ -100,7 +99,7 @@ begin
     alias Operation : StreamOperationType is TransRec.Operation;
     variable Data, ExpectedData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     variable Param, PopParam, ExpectedParam : std_logic_vector(PARAM_LENGTH - 1 downto 0) := (others => '0');
-    variable PopData : std_logic_vector(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := (others => '0');
+    variable PopData : std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0) := (others => '0');
 
     variable TryWordWaiting, TryBurstWaiting : boolean := false;
     variable DispatcherReceiveCount : integer := 0;
@@ -108,6 +107,7 @@ begin
     variable WordCount : integer;
     variable FifoWordCount, CheckWordCount : integer;
     variable BurstBoundary : std_logic;
+    variable MultipleAsyncCalls : boolean := false;
     variable DropUndriven : boolean := FALSE; -- used at BurstFifo byte-mode to drop "-" bits or keep them
     function param_to_string(Param : std_logic_vector) return string is
       alias aParam : std_logic_vector(Param'length - 1 downto 0) is Param;
@@ -151,18 +151,15 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-    
+
             if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
+              MultipleAsyncCalls := true;
               WaitForToggle(BurstReceiveCount);
             end if;
             -- Put Data and Parameters into record
             (Data, Param, BurstBoundary) := pop(ReceiveFifo);
 
-            -- if BurstBoundary = '1' then
-            -- At BurstBoundary, there is always another word that
-            -- follows that triggered the Burst Boundary
-            (Data, Param, BurstBoundary) := pop(ReceiveFifo);
             -- end if;
             TransRec.DataFromModel <= SafeResize(ModelID, Data, TransRec.DataFromModel'length);
             TransRec.ParamFromModel <= SafeResize(ModelID, Param, TransRec.ParamFromModel'length);
@@ -191,6 +188,20 @@ begin
               INFO, TransRec.BoolToModel
               );
             end if;
+            -- After the chained GetAsync calls, there is a burst boundary which has to be consumed!
+            if (MultipleAsyncCalls = true) and (BurstReceiveCount = BurstRequestCount) then
+              (Data, Param, BurstBoundary) := pop(ReceiveFifo);
+              if (BurstBoundary /= '1') then
+                Alert(ModelID, "Burst Boundary expected but not found after Get/Check operation", FAILURE);
+              end if;
+              MultipleAsyncCalls := false;
+            elsif (MultipleAsyncCalls = true) then
+              -- Blocking calls always have a burst boundary which has to be consumed!
+              (Data, Param, BurstBoundary) := pop(ReceiveFifo);
+              if (BurstBoundary /= '1') then
+                Alert(ModelID, "Burst Boundary expected but not found after Get/Check operation", FAILURE);
+              end if;
+            end if;
           end if;
         when GET_BURST | TRY_GET_BURST =>
           if (BurstReceiveCount - BurstRequestCount) = 0 and IsTry(Operation) then
@@ -212,12 +223,12 @@ begin
                 when STREAM_BURST_WORD_MODE =>
                   RequestWordsInCurrentBurst <= TransRec.IntToModel;
                 when STREAM_BURST_WORD_PARAM_MODE =>
-                 RequestWordsInCurrentBurst <= TransRec.IntToModel;
-                  
+                  RequestWordsInCurrentBurst <= TransRec.IntToModel;
+
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode), FAILURE);
               end case;
-               
+
               increment(BurstRequestCount);
             end if;
             TryBurstWaiting := FALSE;
@@ -228,7 +239,6 @@ begin
 
             if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
-
               WaitForToggle(BurstReceiveCount);
             end if;
             FifoWordCount := 0;
@@ -240,19 +250,19 @@ begin
               -- this transaction so exit
               exit when BurstBoundary = '1';
               WordCount := WordCount + 1;
-              Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := PopData(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+              Data(AVALON_STREAM_DATA_WIDTH - 1 downto 0) := PopData(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
               Param := PopParam;
               case BurstFifoMode is
                 when STREAM_BURST_BYTE_MODE =>
                   PushWord(TransRec.BurstFifo, Data, DropUndriven);
                   FifoWordCount := FifoWordCount + CountBytes(Data, DropUndriven);
                 when STREAM_BURST_WORD_MODE =>
-                  Push(TransRec.BurstFifo, Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0));
+                  Push(TransRec.BurstFifo, Data(AVALON_STREAM_DATA_WIDTH - 1 downto 0));
                   FifoWordCount := FifoWordCount + 1;
 
                 when STREAM_BURST_WORD_PARAM_MODE =>
-                  Push(TransRec.BurstFifo, Data & Param) ; -- Last and second Last is not used xD
-                  FifoWordCount := FifoWordCount + 1 ;
+                  Push(TransRec.BurstFifo, Data & Param); -- Last and second Last is not used xD
+                  FifoWordCount := FifoWordCount + 1;
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
               end case;
@@ -307,7 +317,7 @@ begin
               -- this transaction so exit
               exit when BurstBoundary = '1';
               WordCount := WordCount + 1;
-              Data(AVALON_STREAM_WORD_WIDTH - 1 downto 0) := PopData(AVALON_STREAM_WORD_WIDTH - 1 downto 0);
+              Data(AVALON_STREAM_DATA_WIDTH - 1 downto 0) := PopData(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
               Param := PopParam;
               case BurstFifoMode is
                 when STREAM_BURST_BYTE_MODE =>
@@ -438,7 +448,6 @@ begin
             when DEFAULT_EMPTY =>
               ParamEmpty <= SafeResize(ModelID, TransRec.ParamToModel, ParamEmpty'length);
 
-
             when others =>
               Alert(ModelID, "GetOptions, Unimplemented Option: " & to_string(AvalonStreamOptionsType'val(TransRec.Options)), FAILURE);
           end case;
@@ -495,70 +504,60 @@ begin
       if BurstReceiveCount < BurstRequestCount and PacketTransfer then
         -- Packet Mode
         -- start of procedure
-        loop
-          Ready <= '1' after tpd_Clk_Ready;
+        DoAvalonStreamReadyHandshake(Clk, Valid, Ready, RequestWordsInCurrentBurst, ReceivedWordsInCurrentBurst, tpd_Clk_Ready, ModelID);
+        ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1;
+        if StartOfPacket /= '1' then
+          Alert(ModelID, "StartOfPacket is not set to 1 at the beginning of a packet transfer!", FAILURE);
+        end if;
+        -- start of packet
+        vData := Data;
+        vChannel := Channel;
+        vEmpty := Empty;
+        vParam := vChannel & vEmpty; -- 0 is wildcard
+        push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
+        if EndOfPacket = '1' then
+          -- Single-word packet: skip second loop
+          Ready <= '0' after tpd_Clk_Ready;
+          push(ReceiveFifo, vData & vParam & '1'); -- mark as last
+          increment(BurstReceiveCount);
+          ReceivedWordsInCurrentBurst <= 0;
+          Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
+          wait on clk until clk = '1';
+          exit;
+        end if;
+        Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
 
-          if TimeOutPeriod > 0 sec then
-            wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1' for TimeOutPeriod;
-          else
-            wait on Clk until Clk = '1' and Valid = '1' and StartOfPacket = '1';
-          end if;
-          -- start of packet
+        loop
+          -- in packet
+          DoAvalonStreamReadyHandshake(Clk, Valid, Ready, RequestWordsInCurrentBurst, ReceivedWordsInCurrentBurst, tpd_Clk_Ready, ModelID);
+          ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1;
+
           vData := Data;
           vChannel := Channel;
           vEmpty := Empty;
           vParam := vChannel & vEmpty; -- 0 is wildcard
           push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
-
           Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
-          exit when Valid = '1' and StartOfPacket = '1';
-        end loop;
-        loop
-          -- in packet
-          Ready <= '1' after tpd_Clk_Ready;
-
-          if TimeOutPeriod > 0 sec then
-            wait on Clk until Clk = '1' and Valid = '1' for TimeOutPeriod;
-          else
-            wait on Clk until Clk = '1' and Valid = '1';
+          if (ReceivedWordsInCurrentBurst + 1 = RequestWordsInCurrentBurst) then
+            if EndOfPacket /= '1' then
+              Alert(ModelID, "EndOfPacket is not set to 1 at the end of a packet transfer!", FAILURE);
+            end if;
           end if;
+          exit when EndOfPacket = '1';
 
-          if Valid = '1' then
-            vData := Data;
-            vChannel := Channel;
-            vEmpty := Empty;
-            vParam := vChannel & vEmpty; -- 0 is wildcard
-            push(ReceiveFifo, vData & vParam & '0'); -- 0 is not last
-            Log(ModelID, "PacketTransfer: Received Word: " & to_hxstring(vData), INFO);
-            exit when EndOfPacket = '1';
-          else
-            Alert(ModelID, " Valid: " & to_string(Valid) & "  Expected: 1", FAILURE);
-          end if;
         end loop;
         Ready <= '0' after tpd_Clk_Ready;
         -- packet received
         -- push burst boundary
         push(ReceiveFifo, vData & vParam & '1'); -- marks the end of the burst
-
+        ReceivedWordsInCurrentBurst <= 0;
         increment(BurstReceiveCount);
-        wait for 0 ns;
+        wait on clk until clk = '1';
 
       elsif BurstReceiveCount < BurstRequestCount and ReceivedWordsInCurrentBurst < RequestWordsInCurrentBurst and not PacketTransfer then
-       
+
         -- normal receive mode
-        DoAvalonStreamReadyHandshake(
-        Clk => Clk,
-        Valid => Valid,
-        Ready => Ready,
-        StartOfNewStream => StartOfNewStream,
-        WordRequestCount => RequestWordsInCurrentBurst,
-        WordReceiveCount => ReceivedWordsInCurrentBurst,
-        ReadyAllowance => ReadyAllowance,
-        ReadyBeforeValid => ReadyBeforeValid,
-        ReadyDelayCycles => ReadyDelayCycles * tperiod_Clk,
-        tpd_Clk_Ready => tpd_Clk_Ready,
-        AlertLogID => ModelID
-        );
+        DoAvalonStreamReadyHandshake(Clk, Valid, Ready, RequestWordsInCurrentBurst, ReceivedWordsInCurrentBurst, tpd_Clk_Ready, ModelID);
         vData := Data;
         vChannel := Channel;
         vEmpty := Empty;
@@ -567,7 +566,7 @@ begin
         case BurstFifoMode is
           when STREAM_BURST_BYTE_MODE =>
             if (SymbolOrder = true) then
-              ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_WORD_WIDTH);
+              ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
             end if;
             PushData := (others => '-');
             for j in BeatsPerCycle - 1 downto 0 loop --todo das empty wird hier noch nicht verwendet
@@ -581,17 +580,16 @@ begin
           when others =>
             Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
         end case;
-
         ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1; -- todo here aswell
-        wait for 0 ns;
-        if (ReceivedWordsInCurrentBurst = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
+
+        if (ReceivedWordsInCurrentBurst + 1 = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
           StartOfNewStream <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
           Ready <= '0' after tpd_Clk_Ready; -- end of burst
           push(ReceiveFifo, PushData & vParam & '1'); -- marks the end of the burst 
           ReceivedWordsInCurrentBurst <= 0; -- reset for next burst
           wait on clk until clk = '1';
-        elsif (ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst) then
+        elsif (ReceivedWordsInCurrentBurst + 1 > RequestWordsInCurrentBurst) then
           wait for 10 ns;
           Alert(ModelID, "ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst: " &
           to_string(ReceivedWordsInCurrentBurst) & " > " & to_string(RequestWordsInCurrentBurst), FAILURE);

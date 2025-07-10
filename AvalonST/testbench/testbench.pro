@@ -2,4 +2,3 @@ library osvvm_avalonst
 
 analyze AvalonStreamTestCtrl.vhd
 analyze AvalonStreamTestHarness.vhd
-analyze AvalonStreamTestHarnessBeatsPerCycle.vhd

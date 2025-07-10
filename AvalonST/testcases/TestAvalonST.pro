@@ -34,7 +34,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #  
-include ../../Common/Common.pro
+#include ../../OsvvmLibraries.pro
+#include ../../Common/Common.pro
 
 TestSuite AvalonStream
 include ../src/build.pro
@@ -45,6 +46,9 @@ SetSaveWaves true
 # # set testname1 "AvalonStreamReadyLatencyAllowance"
 # # file copy -force "../sim/reports/AvalonStream/$testname1.fst" "../../../"
 #RunTest AvalonStreamPacketTransport.vhd
-#RunTest AvalonStreamSetOptions.vhd
-RunTest AvalonStreamBeatsSymbolOrder.vhd
-#RunTest AvalonStreamSendGetTest.vhd
+RunTest AvalonStreamSetOptions.vhd
+
+
+#RunTest AvalonStreamBeatsSymbolOrder.vhd
+#RunTest AvalonStreamSendGet.vhd
+#RunTest AvalonStreamSendGetPacket.vhd

@@ -84,15 +84,10 @@ package AvalonStreamComponentPkg is
     signal Clk : in std_logic;
     signal Valid : out std_logic;
     signal Ready : in std_logic;
-    signal StartOfNewStream : in integer;
-    constant ReadyLatency : in integer;
-    constant ReadyAllowance : in integer;
-    signal ReadyAllowanceTransferCount : inout integer;
     constant tpd_Clk_Valid : in time;
     constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string := "";
-    constant TimeOutPeriod : in time := -1 sec;
-    constant ReadyBeforeValid : in boolean := false
+    constant TimeOutPeriod : in time := -1 sec
   );
 
   ------------------------------------------------------------
@@ -101,12 +96,8 @@ package AvalonStreamComponentPkg is
     signal Clk : in std_logic;
     signal Valid : in std_logic;
     signal Ready : inout std_logic;
-    signal StartOfNewStream : inout integer;
     constant WordRequestCount : in integer;
     signal WordReceiveCount : inout integer;
-    constant ReadyAllowance : in integer;
-    constant ReadyBeforeValid : in boolean;
-    constant ReadyDelayCycles : in time;
     constant tpd_Clk_Ready : in time;
     constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string := "";
@@ -176,68 +167,21 @@ package body AvalonStreamComponentPkg is
     signal Clk : in std_logic;
     signal Valid : out std_logic;
     signal Ready : in std_logic;
-    signal StartOfNewStream : in integer;
-    constant ReadyLatency : in integer;
-    constant ReadyAllowance : in integer;
-    signal ReadyAllowanceTransferCount : inout integer;
     constant tpd_Clk_Valid : in time;
     constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string := "";
-    constant TimeOutPeriod : in time := -1 sec;
-    constant ReadyBeforeValid : in boolean := false
+    constant TimeOutPeriod : in time := -1 sec
   ) is
   begin
-    if (ReadyLatency = 0 and ReadyAllowance = 0 and Ready = '0') then -- source has to assert valid before ready
+    if (Ready /= '1') then -- source has to assert valid before ready
       Valid <= '1' after tpd_Clk_Valid;
       WaitForReady(Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-    elsif (ReadyLatency > 0 and Ready = '0') then -- sink has to assert ready before valid
-      if (ReadyAllowanceTransferCount > 0) then
-        ReadyAllowanceTransferCount <= ReadyAllowanceTransferCount - 1;
-        Valid <= '1' after tpd_Clk_Valid;
       else
-        WaitForReady(Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-        Valid <= '1' after tpd_Clk_Valid;
-        ReadyAllowanceTransferCount <= ReadyAllowance;
-      end if;
-    elsif(Ready = '1') then
-      Valid <= '1' after tpd_Clk_Valid;
+         Valid <= '1' after tpd_Clk_Valid;
     end if;
-    -- if Ready = '1' then
-    --   Valid <= '1' after tpd_Clk_Valid;
-
-    -- elsif StartOfNewStream = 1 then
-
-    --   ReadyAllowanceCyclesCount <= ReadyAllowance;
-    --   WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-    --   if ReadyLatency > 0 then
-    --     for i in 1 to ReadyLatency - 1 loop
-    --       wait until Clk = '1';
-    --     end loop;
-    --   end if;
-
-    --   Valid <= '1' after tpd_Clk_Valid;
-
-    -- elsif StartOfNewStream = 0 then
-    --   if ReadyAllowance > ReadyLatency then
-    --     if Ready = '0' and ReadyAllowanceCyclesCount > 0 then
-    --       ReadyAllowanceCyclesCount <= ReadyAllowanceCyclesCount - 1;
-    --       Valid <= '1' after tpd_Clk_Valid;
-    --     elsif Ready = '0' then
-    --       Valid <= '0' after tpd_Clk_Valid;
-    --     else
-    --       Alert(AlertLogID, "Failure in ReadyAllowance, this alert should not be reached!", FAILURE);
-    --     end if;
-
-    --   elsif ReadyAllowance = ReadyLatency then
-    --     Valid <= '1' after tpd_Clk_Valid;
-    --     if Ready /= '1' then
-    --       WaitForReady(Clk, Ready, TimeOutPeriod, AlertLogID, TimeOutMessage);
-    --       Valid <= '0';
-    --     end if;
-    --   end if;
-    -- end if;
-
+ 
     wait on clk until Clk = '1';
+     wait for 0 ns;
   end procedure;
 
   ------------------------------------------------------------
@@ -246,29 +190,19 @@ package body AvalonStreamComponentPkg is
     signal Clk : in std_logic;
     signal Valid : in std_logic;
     signal Ready : inout std_logic;
-    signal StartOfNewStream : inout integer;
     constant WordRequestCount : in integer;
     signal WordReceiveCount : inout integer;
-    constant ReadyAllowance : in integer;
-    constant ReadyBeforeValid : in boolean;
-    constant ReadyDelayCycles : in time;
     constant tpd_Clk_Ready : in time;
     constant AlertLogID : in AlertLogIDType := ALERTLOG_DEFAULT_ID;
     constant TimeOutMessage : in string := "";
     constant TimeOutPeriod : in time := -1 sec
   ) is
-    variable UseReadyAllowance : boolean := false;
   begin
-    if (WordRequestCount = WordReceiveCount) then
-      StartOfNewStream <= 1;
-      WordReceiveCount <= 0;
-      wait until clk = '1';
-    end if;
     if (Valid /= '1') then
       WaitForValid(Valid, TimeOutPeriod, AlertLogID, TimeOutMessage);
     end if;
     Ready <= '1' after tpd_Clk_Ready;
-    wait until clk = '1';
+    wait on clk until clk = '1';
   end procedure DoAvalonStreamReadyHandshake;
 
   ------------------------------------------------------------
@@ -434,7 +368,6 @@ package body AvalonStreamComponentPkg is
     constant SymbolWidth : in integer
   ) is
     variable vData : std_logic_vector(WordWidth - 1 downto 0) := (others => 'U');
-    variable vPopSymbolData : std_logic_vector(SymbolWidth - 1 downto 0) := (others => 'U');
     variable vEmptyBeats : integer := 0;
     variable vChannel : std_logic_vector(Channel'range);
     variable vEmpty : std_logic_vector(Empty'range);

@@ -41,10 +41,11 @@
 --  
 architecture AvalonStreamSetOptions of AvalonST_TestCtrl is
 
-  signal TestDone  : integer_barrier                        := 1;
-  constant MAX_LEN : integer                                := maximum(CHANNEL_LEN, EMPTY_LEN);
-  constant DASH    : std_logic_vector(MAX_LEN - 1 downto 0) := (others => '-');
-
+  signal TestDone : integer_barrier := 1;
+  constant MAX_LEN : integer := maximum(CHANNEL_LEN, EMPTY_LEN);
+  constant DASH : std_logic_vector(MAX_LEN - 1 downto 0) := (others => '-');
+  constant cAvalonStreamDataWidth : integer         := 32;
+  constant cNumOfWords : integer := 2;
 begin
 
   ------------------------------------------------------------
@@ -56,7 +57,7 @@ begin
     -- Initialization of test
     SetTestName("AvalonStreamSetOptions");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
-    SetLogEnable(INFO, TRUE);   -- Enable INFO logs
+    SetLogEnable(INFO, TRUE); -- Enable INFO logs
 
     -- Wait for testbench initialization 
     wait for 0 ns;
@@ -87,34 +88,22 @@ begin
   --   Generate transactions for AvalonStreamTransmitter
   ------------------------------------------------------------
   AvalonStreamTransmitterProc : process
-    variable Data    : std_logic_vector(DATA_WIDTH - 1 downto 0) := (others => '0');
-    variable Channel : std_logic_vector(CHANNEL_LEN - 1 downto 0); -- 8
-    variable Empty   : std_logic_vector(EMPTY_LEN - 1 downto 0);   -- 4
+    variable Data : std_logic_vector(DATA_WIDTH - 1 downto 0) := (others => '0');
+    variable Channel : std_logic_vector(CHANNEL_LEN - 1 downto 0);
+    variable Empty : std_logic_vector(EMPTY_LEN - 1 downto 0);
+    variable TxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN - 1 downto 0);
   begin
     wait until Reset = '1';
-    WaitForClock(StreamTxRec, 2);
     Channel := (others => '0');
-    Channel(2) := '1'; 
-    Empty   := (others => '0');
-
+    Channel(2) := '1';
+    Empty := (others => '0');
+    TxParam := (Channel) & (Empty);
     SetAvalonStreamOptions(StreamTxRec, DEFAULT_CHANNEL, Channel);
-    -- SetAxiStreamOptions(StreamTxRec, DEFAULT_DEST, Dest + 2) ;
-    -- SetAxiStreamOptions(StreamTxRec, DEFAULT_USER, User + 1) ;
+    SetAvalonStreamOptions(StreamTxRec, PACKET_TRANSFER, true);
+    SetAvalonStreamOptions(StreamTxRec, SYMBOL_ORDER, false);
+    SetBurstMode(StreamTxRec, STREAM_BURST_BYTE_MODE);
+    SendBurstVector(StreamTxRec, (X"12", X"34", X"56", X"78", X"90", X"12", X"34", X"56"), TxParam);
 
-    for i in 1 to 1 loop
-      Send(StreamTxRec, Data);
-      Data := std_logic_vector(unsigned(Data) + 1);
-    end loop;
-
-    SetAvalonStreamOptions(StreamTxRec, BYTE_ORDER, TRUE);
-    for i in 1 to 1 loop
-      Send(StreamTxRec, Data);
-      Data := std_logic_vector(unsigned(Data) + 1);
-    end loop;
-
-    
-    -- Wait for outputs to propagate and signal TestDone
-    WaitForClock(StreamTxRec, 2);
     WaitForBarrier(TestDone);
     wait;
   end process AvalonStreamTransmitterProc;
@@ -123,51 +112,47 @@ begin
   --   Generate transactions for AvalonStreamReceiver
   ------------------------------------------------------------
   AvalonStreamReceiverProc : process
-    variable Data, RxData   : std_logic_vector(DATA_WIDTH - 1 downto 0) := (others => '0');
-    variable OffSet         : integer;
-    variable Channel        : std_logic_vector(CHANNEL_LEN - 1 downto 0);
-    variable Empty          : std_logic_vector(EMPTY_LEN - 1 downto 0);
-    variable Wildcard : std_logic := '0';
-    variable Param, RxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN + 1 - 1 downto 0);
+    variable RxData : std_logic_vector(8 - 1 downto 0) := (others => '0');
+    variable ReceivedWords : integer := 4;
+    variable Channel : std_logic_vector(CHANNEL_LEN - 1 downto 0);
+    variable Empty : std_logic_vector(EMPTY_LEN - 1 downto 0);
+    variable rx_byte_data  : slv_vector(0 to (cNumOfWords * (cAvalonStreamDataWidth / 8)) - 1)(7 downto 0);
+    variable Param, RxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN - 1 downto 0);
   begin
-    WaitForClock(StreamRxRec, 2);
 
+    rx_byte_data := (0 => X"12", 1 => X"34", 2 => X"56", 3 => X"78", 4 => X"90", 5 => X"12", 6 => X"34", 7 => X"56", others => (others => '0'));
     Channel := (others => '0');
-    Channel(2) := '1'; 
-    Empty   := (others => '0');
+    Channel(2) := '1';
+    Empty := (others => '0');
+    Param := (Channel) & (Empty);
 
+    SetBurstMode(StreamRxRec, STREAM_BURST_BYTE_MODE);
+    SetAvalonStreamOptions(StreamRxRec, SYMBOL_ORDER, false);
+    SetAvalonStreamOptions(StreamRxRec, PACKET_TRANSFER, true);
 
-    Param := (Channel) & (Empty) & Wildcard;
-    for i in 1 to 1 loop
-      case i is
-        when 1 =>
-          Get(StreamRxRec, RxData, RxParam);
-          AffirmIfEqual(RxData, Data, "Data ");
-            AffirmIfEqual(RxParam, Param, "Param Channel & Empty ");
-            Log("Param: " & to_hstring(Param));
-            Log("RxData: " & to_hstring(RxParam));
-        -- when 2 =>
-        --   Check(StreamRxRec, Data, Param);
-        when others =>
-          Check(StreamRxRec, Data);
-      end case;
-      Data := std_logic_vector(unsigned(Data) + 1);
+    GetBurst(StreamRxRec, ReceivedWords, RxParam);
+    AffirmIfEqual(ReceivedWords, 4, "Words");
+    AffirmIfEqual(RxParam, Param, "Param Channel & Empty");
+    for i in 0 to (ReceivedWords * (cAvalonStreamDataWidth / 8)) - 1 loop
+      RxData := Pop(StreamRxRec.BurstFifo);
+      AffirmIfEqual(RxData, rx_byte_data(i), "RxData matches expected data at index " & integer'image(i));
     end loop;
 
     -- Empfang der zweiten Send-Operation mit gesetzter BYTE_ORDER Option
-    SetAvalonStreamOptions(StreamRxRec, BYTE_ORDER, TRUE);
-    Param := (Channel) & (Empty) & Wildcard;
-    for i in 1 to 1 loop
-      case i is
-        when 1 =>
-          Get(StreamRxRec, RxData, RxParam);
-          AffirmIfEqual(RxData, Data, "Data (BYTE_ORDER)");
-          AffirmIfEqual(RxParam, Param, "Param Channel & Empty (BYTE_ORDER)");
-        when others =>
-          Check(StreamRxRec, Data);
-      end case;
-    end loop;
-  
+
+    -- SetAvalonStreamOptions(StreamRxRec, BYTE_ORDER, TRUE);
+    -- Param := (Channel) & (Empty) & Wildcard;
+    -- for i in 1 to 1 loop
+    --   case i is
+    --     when 1 =>
+    --       Get(StreamRxRec, RxData, RxParam);
+    --       AffirmIfEqual(RxData, Data, "Data (BYTE_ORDER)");
+    --       AffirmIfEqual(RxParam, Param, "Param Channel & Empty (BYTE_ORDER)");
+    --     when others =>
+    --       Check(StreamRxRec, Data);
+    --   end case;
+    -- end loop;
+
     -- Wait for outputs to propagate and signal TestDone
     WaitForClock(StreamRxRec, 2);
     WaitForBarrier(TestDone);
