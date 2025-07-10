@@ -151,10 +151,7 @@ begin
 
             -- Get data
             TransRec.BoolFromModel <= TRUE;
-            -- if IsEmpty(ReceiveFifo) then
-            --   -- Wait for data
-            --   WaitForToggle(WordReceiveCount);
-            -- end if;
+    
             if (BurstReceiveCount - BurstRequestCount) = 0 then
               -- Wait for data
               WaitForToggle(BurstReceiveCount);
@@ -221,7 +218,7 @@ begin
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode), FAILURE);
               end case;
-
+               
               increment(BurstRequestCount);
             end if;
             TryBurstWaiting := FALSE;
@@ -344,10 +341,6 @@ begin
               -- there should be a burst boundary now -> consume it
               (PopData, PopParam, BurstBoundary) := pop(ReceiveFifo);
             end if;
-            --   if (BurstBoundary = '0') then
-            --     Alert(ModelID, "Expected BurstBoundary = 1", FAILURE);
-            --   end if;
-            -- end if;
 
             -- Adjust WordRequestCount for the number of words consumed during the burst
             WordRequestCount <= Increment(WordRequestCount, WordCount);
@@ -384,7 +377,6 @@ begin
               AffirmIfEqual(ModelID, Param(EMPTY_RIGHT + EMPTY_LEN - 1 downto EMPTY_RIGHT),
               ExpectedParam(EMPTY_RIGHT + EMPTY_LEN - 1 downto EMPTY_RIGHT), "Empty");
             end if;
-            --AffirmIfEqual(ModelID, Param(0) or BurstBoundary, ExpectedParam(0), "Last");
 
             wait for 0 ns;
           end if;
@@ -496,7 +488,7 @@ begin
     ReceiveLoop : loop
       if WaitForGet then
         -- if no request, wait until we have one
-        if not ((BurstRequestCount > BurstReceiveCount)) then
+        if not (BurstRequestCount > BurstReceiveCount) then
           wait until (BurstRequestCount > BurstReceiveCount) or not WaitForGet;
         end if;
       end if;
@@ -552,7 +544,8 @@ begin
         increment(BurstReceiveCount);
         wait for 0 ns;
 
-      elsif BurstReceiveCount < BurstRequestCount and not PacketTransfer then
+      elsif BurstReceiveCount < BurstRequestCount and ReceivedWordsInCurrentBurst < RequestWordsInCurrentBurst and not PacketTransfer then
+       
         -- normal receive mode
         DoAvalonStreamReadyHandshake(
         Clk => Clk,
@@ -592,12 +585,13 @@ begin
 
         ReceivedWordsInCurrentBurst <= ReceivedWordsInCurrentBurst + 1; -- todo here aswell
         wait for 0 ns;
-        log("received " & to_string(ReceivedWordsInCurrentBurst));
         if (ReceivedWordsInCurrentBurst = RequestWordsInCurrentBurst) then -- todo subtract empty, doesn't have to fit
           StartOfNewStream <= 1;
           BurstReceiveCount <= BurstReceiveCount + 1;
           Ready <= '0' after tpd_Clk_Ready; -- end of burst
           push(ReceiveFifo, PushData & vParam & '1'); -- marks the end of the burst 
+          ReceivedWordsInCurrentBurst <= 0; -- reset for next burst
+          wait for 0 ns;
         elsif (ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst) then
           wait for 10 ns;
           Alert(ModelID, "ReceivedWordsInCurrentBurst > RequestWordsInCurrentBurst: " &
