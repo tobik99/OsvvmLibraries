@@ -122,7 +122,7 @@ begin
           Push(TransmitFifo, vData & Param);
           Increment(TransmitRequestCount);
           if IsBlocking(TransRec.Operation) then
-            wait until TransmitRequestCount = TransmitDoneCount;
+            wait until TransmitRequestCount = TransmitDoneCount and StartOfNewStream = 1;
           end if;
         when WAIT_FOR_TRANSACTION =>
           if TransmitRequestCount /= TransmitDoneCount then
@@ -252,15 +252,16 @@ begin
           StartOfPacket <= '0' after tpd_Clk_StartOfPacket;
 
           if TransmitDoneCount = TransmitRequestCount and StartOfNewStream = 0 then
+            EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
+            Empty <= (others => '0') after tpd_Clk_Empty;
+            Valid <= '0' after tpd_Clk_Valid;
+            Data <= (Data'range => 'X');
+            StartOfNewStream <= 1;
+            wait on clk until clk = '1';
             exit;
           end if;
         end loop;
-        EndOfPacket <= '0' after tpd_Clk_EndOfPacket;
-        Empty <= (others => '0') after tpd_Clk_Empty;
-        Valid <= '0' after tpd_Clk_Valid;
-        Data <= (Data'range => 'X');
-        StartOfNewStream <= 1;
-        wait on clk until clk = '1';
+
       else
 
         -- Find Transaction

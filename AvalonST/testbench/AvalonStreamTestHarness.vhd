@@ -114,8 +114,6 @@ begin
       TransRec      => StreamRxRec
     );
 
-  -- DUT
-  -- test
   TestCtrl_1 : entity osvvm_avalonst.AvalonST_TestCtrl
     generic map(
       CHANNEL_LEN => Channel'length,
