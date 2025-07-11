@@ -38,7 +38,7 @@ entity AvalonStreamTransmitter is
     Data : out std_logic_vector(AVALON_STREAM_DATA_WIDTH - 1 downto 0);
     StartOfPacket : out std_logic := '0';
     EndOfPacket : out std_logic := '0';
-    Empty : out std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
+    Empty : out std_logic_vector(integer(ceil(log2(real(AVALON_STREAM_DATA_WIDTH) / real(AVALON_STREAM_SYMBOL_WIDTH)))) - 1 downto 0) := (others => '0');
 
     Ready : in std_logic;
     Channel : out std_logic_vector(7 downto 0) := (others => '0');

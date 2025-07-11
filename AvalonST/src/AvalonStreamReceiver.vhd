@@ -2,6 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use ieee.numeric_std_unsigned.all;
+use ieee.math_real.all;
 
 library osvvm;
 context osvvm.OsvvmContext;
@@ -35,7 +36,7 @@ entity AvalonStreamReceiver is
 
     StartOfPacket : in std_logic := '0';
     EndOfPacket : in std_logic := '0';
-    Empty : in std_logic_vector((AVALON_STREAM_DATA_WIDTH/AVALON_STREAM_SYMBOL_WIDTH) - 1 downto 0) := (others => '0');
+    Empty : in std_logic_vector(integer(ceil(log2(real(AVALON_STREAM_DATA_WIDTH) / real(AVALON_STREAM_SYMBOL_WIDTH)))) - 1 downto 0);
     Channel : in std_logic_vector(7 downto 0) := (others => '0');
     -- testbench record
     TransRec : inout StreamRecType

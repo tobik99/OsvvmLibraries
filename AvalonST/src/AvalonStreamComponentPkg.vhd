@@ -78,6 +78,9 @@ package AvalonStreamComponentPkg is
       -- testbench record
       TransRec : inout StreamRecType);
   end component AvalonStreamTransmitter;
+
+ function log2(x : positive) return natural;
+
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
     ------------------------------------------------------------
@@ -273,4 +276,15 @@ package body AvalonStreamComponentPkg is
       Empty <= vEmpty;
       EmptyBeats := vEmptyBeats;
   end procedure;
+
+  function log2(x : positive) return natural is
+        variable result : natural := 0;
+        variable value : positive := x;
+    begin
+        while value > 1 loop
+            value := value / 2;
+            result := result + 1;
+        end loop;
+        return result;
+    end function;
 end package body AvalonStreamComponentPkg;
