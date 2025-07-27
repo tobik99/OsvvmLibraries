@@ -9,28 +9,37 @@ context osvvm_avalonst.AvalonStreamContext;
 entity AvalonStreamTestHarness is
 end entity AvalonStreamTestHarness;
 architecture bhv of AvalonStreamTestHarness is
-
-  constant tperiod_Clk             : time    := 10 ns;
-  constant tpd                     : time    := 2 ns;
-  constant AvalonStreamDataWidth   : integer := 32;
+  function log2(x : positive) return natural is
+    variable result : natural := 0;
+    variable value : positive := x;
+  begin
+    while value > 1 loop
+      value := value / 2;
+      result := result + 1;
+    end loop;
+    return result;
+  end function;
+  constant tperiod_Clk : time := 10 ns;
+  constant tpd : time := 2 ns;
+  constant AvalonStreamDataWidth : integer := 32;
   constant AvalonStreamSymbolWidth : integer := 8;
 
   constant TCHANNEL_MAX_WIDTH : integer := 8; -- maximum number of AvalonStream channels
-  constant TEMPTY_MAX_WIDTH   : integer := AvalonStreamDataWidth/AvalonStreamSymbolWidth;
+  constant TEMPTY_MAX_WIDTH : integer := log2(AvalonStreamDataWidth/AvalonStreamSymbolWidth);
 
-  constant INIT_CHANNEL    : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0) := (others => '0');
-  constant INIT_EMPTY      : std_logic_vector(TEMPTY_MAX_WIDTH - 1 downto 0)   := (others => '0');
-  constant AXI_PARAM_WIDTH : integer                                           := TCHANNEL_MAX_WIDTH + TEMPTY_MAX_WIDTH;
-  signal Clk               : std_logic                                         := '1';
-  signal Reset             : std_logic                                         := '0';
+  constant INIT_CHANNEL : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0) := (others => '0');
+  constant INIT_EMPTY : std_logic_vector(TEMPTY_MAX_WIDTH - 1 downto 0) := (others => '0');
+  constant AXI_PARAM_WIDTH : integer := TCHANNEL_MAX_WIDTH + TEMPTY_MAX_WIDTH;
+  signal Clk : std_logic := '1';
+  signal Reset : std_logic := '0';
 
-  signal Ready                    : std_logic;
-  signal Data                     : std_logic_vector(AvalonStreamDataWidth - 1 downto 0);
-  signal Valid                    : std_logic;
-  signal StartOfPacket            : std_logic;
-  signal EndOfPacket              : std_logic;
-  signal Empty                    : std_logic_vector(AvalonStreamDataWidth/AvalonStreamSymbolWidth - 1 downto 0) := (others => '0');
-  signal Channel                  : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0)                            := (others => '0');
+  signal Ready : std_logic;
+  signal Data : std_logic_vector(AvalonStreamDataWidth - 1 downto 0);
+  signal Valid : std_logic;
+  signal StartOfPacket : std_logic;
+  signal EndOfPacket : std_logic;
+  signal Empty : std_logic_vector(TEMPTY_MAX_WIDTH - 1 downto 0) := (others => '0');
+  signal Channel : std_logic_vector(TCHANNEL_MAX_WIDTH - 1 downto 0) := (others => '0');
   signal StreamRxRec, StreamTxRec : StreamRecType(
   DataToModel (AvalonStreamDataWidth - 1 downto 0),
   DataFromModel (AvalonStreamDataWidth - 1 downto 0),
@@ -40,12 +49,12 @@ architecture bhv of AvalonStreamTestHarness is
   component AvalonST_TestCtrl is
     generic (
       CHANNEL_LEN : integer;
-      EMPTY_LEN   : integer
+      EMPTY_LEN : integer
     );
     port (
       -- Global Signal Interface
       Reset : in std_logic;
-      Clk   : in std_logic;
+      Clk : in std_logic;
 
       -- Record Interface
       StreamTxRec : inout StreamRecType;
@@ -56,73 +65,73 @@ begin
 
   -- create Clock 
   Osvvm.ClockResetPkg.CreateClock (
-  Clk    => Clk,
+  Clk => Clk,
   Period => Tperiod_Clk
   );
 
   -- create nReset 
   Osvvm.ClockResetPkg.CreateReset (
-  Reset       => Reset,
+  Reset => Reset,
   ResetActive => '0',
-  Clk         => Clk,
-  Period      => 2 * tperiod_Clk,
-  tpd         => tpd
+  Clk => Clk,
+  Period => 2 * tperiod_Clk,
+  tpd => tpd
   );
 
   AvalonStreamTransmitter_VC : entity osvvm_avalonst.AvalonStreamTransmitter(bhv)
     generic map(
-      MODEL_ID_NAME              => "AvalonStreamTransmitter",
-      INIT_CHANNEL               => INIT_CHANNEL,
-      INIT_EMPTY                 => INIT_EMPTY,
-      AVALON_STREAM_DATA_WIDTH   => AvalonStreamDataWidth,
+      MODEL_ID_NAME => "AvalonStreamTransmitter",
+      INIT_CHANNEL => INIT_CHANNEL,
+      INIT_EMPTY => INIT_EMPTY,
+      AVALON_STREAM_DATA_WIDTH => AvalonStreamDataWidth,
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
-      DEFAULT_DELAY              => 1 ns,
-      tpd_Clk_Valid              => 1 ns,
-      tpd_Clk_Data               => 1 ns
+      DEFAULT_DELAY => 1 ns,
+      tpd_Clk_Valid => 1 ns,
+      tpd_Clk_Data => 1 ns
     )
     port map(
-      Clk           => Clk,
-      Reset         => Reset,
-      Valid         => Valid,
-      Data          => Data,
-      Channel       => Channel,
-      Ready         => Ready,
+      Clk => Clk,
+      Reset => Reset,
+      Valid => Valid,
+      Data => Data,
+      Channel => Channel,
+      Ready => Ready,
       StartOfPacket => StartOfPacket,
-      EndOfPacket   => EndOfPacket,
-      Empty         => Empty,
-      TransRec      => StreamTxRec
+      EndOfPacket => EndOfPacket,
+      Empty => Empty,
+      TransRec => StreamTxRec
     );
 
   AvalonSreamReceiver_VC : entity osvvm_avalonst.AvalonStreamReceiver(bhv)
     generic map(
-      MODEL_ID_NAME              => "AvalonSreamReceiver",
-      AVALON_STREAM_DATA_WIDTH   => AvalonStreamDataWidth,
+      MODEL_ID_NAME => "AvalonSreamReceiver",
+      AVALON_STREAM_DATA_WIDTH => AvalonStreamDataWidth,
       AVALON_STREAM_SYMBOL_WIDTH => AvalonStreamSymbolWidth,
-      DEFAULT_DELAY              => 1 ns,
-      tpd_Clk_Ready             => 1 ns
+      DEFAULT_DELAY => 1 ns,
+      tpd_Clk_Ready => 1 ns
     )
     port map(
-      Clk           => Clk,
-      Reset         => Reset,
-      Valid         => Valid,
-      Data          => Data,
-      Channel       => Channel,
-      Ready         => Ready,
+      Clk => Clk,
+      Reset => Reset,
+      Valid => Valid,
+      Data => Data,
+      Channel => Channel,
+      Ready => Ready,
       StartOfPacket => StartOfPacket,
-      EndOfPacket   => EndOfPacket,
-      Empty         => Empty,
-      TransRec      => StreamRxRec
+      EndOfPacket => EndOfPacket,
+      Empty => Empty,
+      TransRec => StreamRxRec
     );
 
   TestCtrl_1 : entity osvvm_avalonst.AvalonST_TestCtrl
     generic map(
       CHANNEL_LEN => Channel'length,
-      EMPTY_LEN   => Empty'length
+      EMPTY_LEN => Empty'length
     )
     port map(
       -- Globals
       Reset => Reset,
-      Clk   => Clk,
+      Clk => Clk,
 
       -- Transaction Record
       StreamTxRec => StreamTxRec,

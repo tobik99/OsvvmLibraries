@@ -262,7 +262,7 @@ begin
                   FifoWordCount := FifoWordCount + 1;
 
                 when STREAM_BURST_WORD_PARAM_MODE =>
-                  Push(TransRec.BurstFifo, Data & Param); -- Last and second Last is not used xD
+                  Push(TransRec.BurstFifo, Data & Param);
                   FifoWordCount := FifoWordCount + 1;
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
@@ -332,18 +332,12 @@ begin
                   FifoWordCount := FifoWordCount + 1;
 
                 when STREAM_BURST_WORD_PARAM_MODE =>
-                  -- todo
-                  -- Checking done here to differentiate data from user
-                  -- (ExpectedData, ExpectedUser) := Pop(TransRec.BurstFifo);
-                  -- AffirmIfEqual(BurstFifoID, Data, ExpectedData, "Data");
-                  -- AffirmIfEqual(BurstFifoID, Param(USER_LEN downto 1), ExpectedUser, "User");
-                  -- --                Check(TransRec.BurstFifo, Data & Param(USER_LEN downto 1)) ;
-                  -- FifoWordCount := FifoWordCount + 1;
+                  Check(TransRec.BurstFifo, Data & Param);
+                  FifoWordCount := FifoWordCount + 1;
 
                 when others =>
                   Alert(ModelID, "BurstFifoMode: Invalid Mode: " & to_string(BurstFifoMode));
               end case;
-              exit when Param(0) = '1';
               exit when FifoWordCount >= CheckWordCount;
             end loop;
             if (FifoWordCount = CheckWordCount) then
@@ -400,8 +394,6 @@ begin
           WaitForClock(Clk, TransRec.IntToModel);
 
         when GET_TRANSACTION_COUNT =>
-          --!! This is GetTotalTransactionCount vs. GetPendingTransactionCount
-          --!!  Get Pending Get Count = GetFifoCount(PacketFifo)
           TransRec.IntFromModel <= WordReceiveCount;
 
         when SET_BURST_MODE =>
@@ -510,7 +502,7 @@ begin
         vParam := vChannel & vEmpty;
         case BurstFifoMode is
           when STREAM_BURST_BYTE_MODE =>
-            if (SymbolOrder = true) then
+            if (SymbolOrder = true and BeatsPerCycle > 1) then
               ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
             end if;
             PushData := (others => '-');
@@ -552,7 +544,7 @@ begin
           vParam := vChannel & vEmpty;
           case BurstFifoMode is
             when STREAM_BURST_BYTE_MODE =>
-              if (SymbolOrder = true) then
+              if (SymbolOrder = true and BeatsPerCycle > 1) then
                 ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
               end if;
               PushData := (others => '-');
@@ -595,7 +587,7 @@ begin
 
         case BurstFifoMode is
           when STREAM_BURST_BYTE_MODE =>
-            if (SymbolOrder = true) then
+            if (SymbolOrder = true and BeatsPerCycle > 1) then
               ReverseSymbolOrder(vData, AVALON_STREAM_SYMBOL_WIDTH, AVALON_STREAM_DATA_WIDTH);
             end if;
             PushData := (others => '-');

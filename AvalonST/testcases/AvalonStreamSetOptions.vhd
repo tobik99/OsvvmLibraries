@@ -63,8 +63,8 @@ begin
     -- Wait for testbench initialization 
     wait for 0 ns;
     wait for 0 ns;
-   -- TranscriptOpen;
-   -- SetTranscriptMirror(TRUE);
+    -- TranscriptOpen;
+    -- SetTranscriptMirror(TRUE);
 
     -- Wait for Design Reset
     wait until Reset = '1';
@@ -89,12 +89,13 @@ begin
     variable SendNumWords : integer := 2;
     variable TxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN - 1 downto 0);
     variable tx_byte_data : slv_vector(0 to 7)(7 downto 0);
+    variable tx_data : slv_vector(0 to 7)(31 downto 0);
   begin
     wait until Reset = '1';
     tx_byte_data := (0 => X"12", 1 => X"34", 2 => X"56", 3 => X"78", 4 => X"90", 5 => X"12", 6 => X"34", 7 => X"56", others => (others => '0'));
     Channel := (others => '0');
     Channel(2) := '1';
-    Empty := (others => '0');
+    Empty := (others => '1');
     TxParam := (Channel) & (Empty);
     SetAvalonStreamOptions(StreamTxRec, DEFAULT_CHANNEL, Channel);
     SetAvalonStreamOptions(StreamTxRec, PACKET_TRANSFER, true);
@@ -106,6 +107,14 @@ begin
     end loop;
     SendBurst(StreamTxRec, 8, TxParam);
     wait for 20 ns;
+    -- send/check burst with param mode
+    SetBurstMode(StreamTxRec, STREAM_BURST_WORD_PARAM_MODE);
+    tx_data := (0 => X"12345678", 1 => X"90ABCDEF", 2 => X"12345678", 3 => X"90ABCDEF",
+                4 => X"12345678", 5 => X"90ABCDEF", 6 => X"12345678", 7 => X"90ABCDEF", others => (others => '0'));
+    for i in 0 to 7 loop
+      Push(StreamTxRec.BurstFifo, tx_data(i) & TxParam);
+    end loop;
+    SendBurst(StreamTxRec, 8);
     WaitForBarrier(TestDone);
     wait;
   end process AvalonStreamTransmitterProc;
@@ -119,13 +128,14 @@ begin
     variable Channel : std_logic_vector(CHANNEL_LEN - 1 downto 0);
     variable Empty : std_logic_vector(EMPTY_LEN - 1 downto 0);
     variable rx_byte_data : slv_vector(0 to 7)(7 downto 0);
+    variable rx_data : slv_vector(0 to 7)(31 downto 0);
     variable Param, RxParam : std_logic_vector(CHANNEL_LEN + EMPTY_LEN - 1 downto 0);
   begin
     wait until Reset = '1';
     rx_byte_data := (0 => X"12", 1 => X"34", 2 => X"56", 3 => X"78", 4 => X"90", 5 => X"12", 6 => X"34", 7 => X"56", others => (others => '0'));
     Channel := (others => '0');
     Channel(2) := '1';
-    Empty := (others => '0');
+    Empty := (others => '1');
     Param := (Channel) & (Empty);
 
     SetBurstMode(StreamRxRec, STREAM_BURST_BYTE_MODE);
@@ -139,7 +149,16 @@ begin
       RxData := Pop(StreamRxRec.BurstFifo);
       AffirmIfEqual(RxData, rx_byte_data(i), "RxData matches expected data at index " & integer'image(i));
     end loop;
-    wait for 20 ns;
+    wait for 60 ns;
+     -- send/check burst with param mode
+    SetBurstMode(StreamRxRec, STREAM_BURST_WORD_PARAM_MODE);
+    rx_data := (0 => X"12345678", 1 => X"90ABCDEF", 2 => X"12345678", 3 => X"90ABCDEF",
+                4 => X"12345678", 5 => X"90ABCDEF", 6 => X"12345678", 7 => X"90ABCDEF", others => (others => '0'));
+    for i in 0 to 7 loop
+      Push(StreamRxRec.BurstFifo, rx_data(i) & Param);
+    end loop;
+    CheckBurst(StreamRxRec, 8, Param);
+
     WaitForBarrier(TestDone);
     wait;
   end process AvalonStreamReceiverProc;
