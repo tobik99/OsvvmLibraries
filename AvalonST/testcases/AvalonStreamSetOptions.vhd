@@ -23,9 +23,6 @@ begin
     -- Wait for testbench initialization 
     wait for 0 ns;
     wait for 0 ns;
-    -- TranscriptOpen;
-    -- SetTranscriptMirror(TRUE);
-
     -- Wait for Design Reset
     wait until Reset = '1';
     ClearAlerts;

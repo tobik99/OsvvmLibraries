@@ -16,4 +16,6 @@ library osvvm_avalonst
 # set testname1 "AvalonStreamReadyLatencyAllowance"
 # file copy -force "../sim/reports/AvalonStream/$testname1.fst" "../../../"
 RunTest AvalonStreamSetOptions.vhd
-
+RunTest AvalonStreamBeatsSymbolOrder.vhd
+RunTest AvalonStreamSendGet.vhd
+RunTest AvalonStreamSendGetPacket.vhd
