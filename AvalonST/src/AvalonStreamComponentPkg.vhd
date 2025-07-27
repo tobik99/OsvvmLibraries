@@ -1,44 +1,3 @@
---
---  File Name:         UartTxComponentPkg.vhd
---  Design Unit Name:  UartTxComponentPkg
---  OSVVM Release:     OSVVM MODELS STANDARD VERSION
---
---  Maintainer:        Jim Lewis      email:  jim@synthworks.com
---  Contributor(s):
---     Jim Lewis      jim@synthworks.com
---
---
---  Description:
---      Component in package to facilitate usage of component instantiation
---
---
---  Developed by:
---        SynthWorks Design Inc.
---        VHDL Training Classes
---        http://www.SynthWorks.com
---
---  Revision History:
---    Date      Version    Description
---    05/2019   2019.05    Updated for OSVVM public release
---    01/2020   2020.01    Updated license notice
---
---
---  This file is part of OSVVM.
---
---  Copyright (c) 2019 - 2020 by SynthWorks Design Inc.
---
---  Licensed under the Apache License, Version 2.0 (the "License");
---  you may not use this file except in compliance with the License.
---  You may obtain a copy of the License at
---
---      https://www.apache.org/licenses/LICENSE-2.0
---
---  Unless required by applicable law or agreed to in writing, software
---  distributed under the License is distributed on an "AS IS" BASIS,
---  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
---  See the License for the specific language governing permissions and
---  limitations under the License.
---
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -48,8 +7,6 @@ use osvvm.ScoreboardPkg_slv.all;
 
 library osvvm_common;
 context osvvm_common.OsvvmCommonContext; -- for MIT StreamRecType
-
---use work.AvalonST_tb_pkg.all;
 
 package AvalonStreamComponentPkg is
   component AvalonStreamTransmitter is
@@ -79,7 +36,7 @@ package AvalonStreamComponentPkg is
       TransRec : inout StreamRecType);
   end component AvalonStreamTransmitter;
 
- function log2(x : positive) return natural;
+  function log2(x : positive) return natural;
 
   ------------------------------------------------------------
   procedure DoAvalonStreamValidHandshake (
@@ -267,24 +224,24 @@ package body AvalonStreamComponentPkg is
     variable vChannel : std_logic_vector(Channel'range);
     variable vEmpty : std_logic_vector(Empty'range);
   begin
-      (vData, vChannel, vEmpty) := Pop(TransmitFifo);
-      if (SymbolOrder = true and BurstFifoMode = STREAM_BURST_BYTE_MODE) then
-        ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
-      end if;
-      Data <= vData;
-      Channel <= vChannel;
-      Empty <= vEmpty;
-      EmptyBeats := vEmptyBeats;
+    (vData, vChannel, vEmpty) := Pop(TransmitFifo);
+    if (SymbolOrder = true and BurstFifoMode = STREAM_BURST_BYTE_MODE) then
+      ReverseSymbolOrder(vData, SymbolWidth, WordWidth);
+    end if;
+    Data <= vData;
+    Channel <= vChannel;
+    Empty <= vEmpty;
+    EmptyBeats := vEmptyBeats;
   end procedure;
 
   function log2(x : positive) return natural is
-        variable result : natural := 0;
-        variable value : positive := x;
-    begin
-        while value > 1 loop
-            value := value / 2;
-            result := result + 1;
-        end loop;
-        return result;
-    end function;
+    variable result : natural := 0;
+    variable value : positive := x;
+  begin
+    while value > 1 loop
+      value := value / 2;
+      result := result + 1;
+    end loop;
+    return result;
+  end function;
 end package body AvalonStreamComponentPkg;

@@ -13,15 +13,14 @@ context OSVVM_Common.OsvvmCommonContext;
 
 package AvalonStreamOptionsPkg is
   type AvalonStreamOptionsType is (
-    READY_LATENCY,   -- Integer
-    READY_ALLOWANCE, -- Integer
-    SYMBOL_ORDER,      -- Boolean
-    PACKET_TRANSFER, -- Boolean
+    READY_LATENCY,
+    READY_ALLOWANCE,
+    SYMBOL_ORDER,
+    PACKET_TRANSFER,
     SET_BURST_MODE,
     GET_BURST_MODE,
-    DEFAULT_CHANNEL, -- Integer
-    DEFAULT_EMPTY,   -- Integer
-    DEFAULT_LAST
+    DEFAULT_CHANNEL,
+    DEFAULT_EMPTY
   );
   procedure SetAvalonStreamOptions (
     signal TransRec : inout StreamRecType;

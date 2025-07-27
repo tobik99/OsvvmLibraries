@@ -11,7 +11,6 @@ begin
   ControlProc : process
   begin
     -- Initialization of test
-
     SetTestName("AvalonStreamSendGetPacket");
     SetLogEnable(PASSED, TRUE); -- Enable PASSED logs
     SetLogEnable(INFO, TRUE); -- Enable INFO logs

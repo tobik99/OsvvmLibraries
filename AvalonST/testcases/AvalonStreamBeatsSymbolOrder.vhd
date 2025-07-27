@@ -2,9 +2,9 @@ library osvvm_avalonst;
 context osvvm_avalonst.AvalonStreamContext;
 
 architecture BeatsSymbolOrder of AvalonST_TestCtrl is
-  signal TestDone                 : integer_barrier := 1;
-  signal C_NUM_WORDS              : integer         := 2;
-  constant cAvalonStreamDataWidth : integer         := 32;
+  signal TestDone : integer_barrier := 1;
+  signal C_NUM_WORDS : integer := 2;
+  constant cAvalonStreamDataWidth : integer := 32;
 begin
 
   ------------------------------------------------------------
@@ -22,7 +22,7 @@ begin
     wait until Reset = '1';
     ClearAlerts;
 
-     -- Wait for test to finish
+    -- Wait for test to finish
     -- every process has to call its own TestDone, otherwise the watchdog will execute
     WaitForBarrier(TestDone, 1000 ns);
     AlertIf(now >= 1000 ns, "Test finished due to timeout");
@@ -45,7 +45,6 @@ begin
     SetBurstMode(StreamTxRec, STREAM_BURST_BYTE_MODE);
     SendBurstVector(StreamTxRec, (X"12", X"34", X"56", X"78", X"90", X"12", X"34", X"56"));
     SetAvalonStreamOptions(StreamTxRec, SYMBOL_ORDER, false);
-    --WaitForClock(StreamTxRec, 3);
     SendBurstVector(StreamTxRec, (X"12", X"34", X"56", X"78", X"90", X"12", X"34", X"56"));
     WaitForBarrier(TestDone);
     wait;
@@ -55,9 +54,9 @@ begin
   -- Receiver Process
   ------------------------------------------------------------
   receiver_proc : process
-    variable rx_byte_data  : slv_vector(0 to (C_NUM_WORDS * (cAvalonStreamDataWidth / 8)) - 1)(7 downto 0);
-    variable RxByteData    : std_logic_vector(7 downto 0);
-    variable receiveWords  : integer := C_NUM_WORDS; -- Number of words to receive
+    variable rx_byte_data : slv_vector(0 to (C_NUM_WORDS * (cAvalonStreamDataWidth / 8)) - 1)(7 downto 0);
+    variable RxByteData : std_logic_vector(7 downto 0);
+    variable receiveWords : integer := C_NUM_WORDS; -- Number of words to receive
   begin
     wait until Reset = '1';
     SetBurstMode(StreamRxRec, STREAM_BURST_BYTE_MODE);
@@ -82,7 +81,7 @@ begin
       RxByteData := Pop(StreamRxRec.BurstFifo);
       AffirmIfEqual(RxByteData, rx_byte_data(i), "RxData matches expected data at index " & integer'image(i));
     end loop;
-   
+
     WaitForBarrier(TestDone);
     wait;
   end process receiver_proc;

@@ -46,7 +46,7 @@ begin
     for I in 1 to 5 loop
       Send(StreamTxRec, std_logic_vector(unsigned(CheckDataWord) + to_unsigned(I, CheckDataWord'length)));
     end loop;
-      WaitForTransaction(StreamTxRec);
+    WaitForTransaction(StreamTxRec);
     WaitForClock(StreamTxRec, 2);
 
     -- -- Send and Check    
@@ -74,7 +74,6 @@ begin
     end loop;
     SendBurst(StreamTxRec, 5);
 
-    --     WaitForClock(StreamTxRec, 2);
     -- SendBurst and CheckBurst    
     WaitForClock(StreamTxRec, 2);
     log("SendBurstVector 5 word burst");
@@ -104,7 +103,7 @@ begin
   begin
     wait until Reset = '1';
 
-   -- log("Get 5 words") ;
+    -- log("Get 5 words") ;
     CheckDataWord := x"0000_0000";
     for I in 1 to 5 loop
       Get(StreamRxRec, RxData);

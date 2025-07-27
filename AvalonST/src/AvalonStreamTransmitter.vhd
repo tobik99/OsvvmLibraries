@@ -14,13 +14,11 @@ entity AvalonStreamTransmitter is
   generic (
     INIT_CHANNEL : std_logic_vector := "";
     INIT_EMPTY : std_logic_vector := "";
-    INIT_LAST : natural := 0;
 
     MODEL_ID_NAME : string := "";
     AVALON_STREAM_DATA_WIDTH : integer range 1 to 8192 := 32;
     AVALON_STREAM_SYMBOL_WIDTH : integer range 1 to AVALON_STREAM_DATA_WIDTH := 8;
     AVALON_STREAM_CHANNELS : integer range 1 to 256 := 1;
-    AVALON_STREAM_ERROR : integer range 1 to 256 := 1;
     DEFAULT_DELAY : time := 1 ns;
     tpd_Clk_Data : time := DEFAULT_DELAY;
     tpd_Clk_Valid : time := DEFAULT_DELAY;
@@ -39,7 +37,6 @@ entity AvalonStreamTransmitter is
     StartOfPacket : out std_logic := '0';
     EndOfPacket : out std_logic := '0';
     Empty : out std_logic_vector(integer(ceil(log2(real(AVALON_STREAM_DATA_WIDTH) / real(AVALON_STREAM_SYMBOL_WIDTH)))) - 1 downto 0) := (others => '0');
-
     Ready : in std_logic;
     Channel : out std_logic_vector(7 downto 0) := (others => '0');
 
@@ -57,7 +54,6 @@ end AvalonStreamTransmitter;
 
 architecture bhv of AvalonStreamTransmitter is
   signal ModelID, BusFailedID : AlertLogIDType;
-  --signal TransmitFifo                            : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
   signal TransmitRequestCount, TransmitDoneCount : integer := 0;
   signal StartOfNewStream : integer := 1;
   signal TransmitFifo : osvvm.ScoreboardPkg_slv.ScoreboardIDType;
@@ -82,9 +78,6 @@ begin
     -- Alerts
     ID := NewID(MODEL_INSTANCE_NAME);
     ModelID <= ID;
-    --    ProtocolID       <= NewID("Protocol Error", ID ) ;
-    --    DataCheckID      <= NewID("Data Check", ID ) ;
-    --BusFailedID  <= NewID("No response", ID);
     TransmitFifo <= NewID("TransmitFifo", ID, ReportMode => ENABLED, Search => PRIVATE_NAME);
     AlertIf(ModelID, AVALON_STREAM_DATA_WIDTH mod AVALON_STREAM_SYMBOL_WIDTH /= 0,
     "AvalonStreamTransmitter: AVALON_STREAM_DATA_WIDTH must be a multiple of AVALON_STREAM_SYMBOL_WIDTH", FAILURE);
@@ -147,7 +140,6 @@ begin
             case BurstFifoMode is
               when STREAM_BURST_BYTE_MODE =>
                 PopWord(TransRec.BurstFifo, PopValid, vData, BytesToSend);
-                -- AlertIfNot(ModelID, PopValid, "BurstFifo Empty during burst transfer", FAILURE);
               when STREAM_BURST_WORD_MODE =>
                 vData := Pop(TransRec.BurstFifo);
               when STREAM_BURST_WORD_PARAM_MODE =>
@@ -227,7 +219,7 @@ begin
     StartOfNewStream <= 1;
     Empty <= (others => '0');
     wait for 0 ns;
-    wait for 0 ns; -- two delta-cycles to ensure that the scoreboards are initialized
+    wait for 0 ns;
 
     TransmitLoop : loop
       if IsEmpty(TransmitFifo) and TransmitRequestCount = TransmitDoneCount then
